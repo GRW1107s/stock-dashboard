@@ -1,6 +1,5 @@
-"""US index updates + opt-in TSE P/S/G snapshots.
-Third-party ingestion is disabled until the website owner has authorized both
-scheduled fetching and publication on a public GitHub Pages website.
+"""US indices and Japanese market-index daily history + TSE market volume.
+Third-party data ingestion requires permission and explicit opt-in.
 """
 import bisect
 import datetime as dt
@@ -172,35 +171,43 @@ def fetch_tse_volume():
 
 
 def fetch_tse_indices():
-    data = json.loads(fetch('https://kabubusho.com/api/indices'))
-    candidates = []
-    if isinstance(data.get('indices'), list):
-        candidates.extend(data['indices'])
-    if isinstance(data.get('groups'), list):
-        for g in data['groups']:
-            if isinstance(g, dict):
-                candidates.extend(g.get('indices', []))
-    result = {}
-    for rec in candidates:
-        if not isinstance(rec, dict):
-            continue
-        code = rec.get('index_code')
-        for key, wanted in MARKETS.items():
-            if code != wanted:
+    """Read daily close and reported daily % change for the three exact market indices.
+
+    The table also contains Prime Composite, Standard TOP20, and Growth Core.
+    Their columns must NOT be confused with the three requested market indices.
+    """
+    html = fetch('https://stock-marketdata.com/index-prime-standard-growth')
+    parser = SimpleTables()
+    parser.feed(html)
+    out = {}
+    date_pattern = re.compile(r'\s*(20\d{2})年(\d{1,2})月(\d{1,2})日\s*')
+    for table in parser.tables:
+        for cells in table:
+            if len(cells) < 19:
                 continue
-            date, close = rec.get('date'), numeric(rec.get('close'))
-            if not isinstance(date, str) or not re.fullmatch(r'20\d{2}-\d{2}-\d{2}', date) or close is None or close <= 0:
+            match = date_pattern.fullmatch(cells[0].replace('\xa0', ' '))
+            if not match:
                 continue
-            dt.date.fromisoformat(date)
-            record = {'date': date, 'close': close, 'low': numeric(rec.get('low')),
-                      'reported_change_pct': numeric(rec.get('change_pct'))}
-            old = result.get(key)
-            if old is None or date >= old['date']:
-                result[key] = record
-    if not result:
-        raise ValueError('No P/S/G index codes in API response')
-    print('TSE INDEX SNAPSHOTS:', {key: (v['date'], v['close']) for key, v in result.items()})
-    return result
+            day = dt.date(*map(int, match.groups())).isoformat()
+            record = {}
+            # [date, prime (close,diff,pct), prime composite,
+            #  standard (close,diff,pct), standard top20,
+            #  growth (close,diff,pct), growth core]
+            for key, close_idx, pct_idx in [('prime', 1, 3), ('standard', 7, 9), ('growth', 13, 15)]:
+                close = numeric(cells[close_idx].replace(',', '').strip())
+                change = numeric(cells[pct_idx].replace('%', '').replace('−', '-').replace('＋', '+').strip())
+                if close is None or close <= 0 or change is None or abs(change) > 30:
+                    raise ValueError(f'Invalid {key} market-index row on {day}: {cells[:19]}')
+                record[key] = {'date': day, 'close': close, 'reported_change_pct': change}
+            if day in out and out[day] != record:
+                raise ValueError(f'Duplicate conflicting index date {day}')
+            out[day] = record
+    if len(out) < 20:
+        raise ValueError(f'Insufficient TSE index history from the table: {len(out)} rows')
+    days = sorted(out)
+    print(f'TSE INDEX HISTORY: {len(out)} sessions, {days[0]} through {days[-1]}')
+    print('TSE LATEST INDEX:', {key: (out[days[-1]][key]['close'], out[days[-1]][key]['reported_change_pct']) for key in MARKETS})
+    return out
 
 
 def existing_published():
@@ -241,22 +248,25 @@ def prepare_tse(previous, volume, indices):
         history.setdefault(date, {})
         for key, item in data.items():
             history[date].setdefault(key, {}).update(item)
-    for key, snapshot in indices.items():
-        date = snapshot['date']
-        history.setdefault(date, {}).setdefault(key, {}).update(snapshot)
+    for date, records in indices.items():
+        history.setdefault(date, {})
+        for key, record in records.items():
+            history[date].setdefault(key, {}).update(record)
     # Calculate change from actual consecutive index CLOSES, or an explicitly reported one-day change.
     for key in MARKETS:
         price_days = sorted(day for day in history if numeric(history[day].get(key, {}).get('close')) is not None)
         for idx, day in enumerate(price_days):
             rec = history[day][key]
             reported = numeric(rec.get('reported_change_pct'))
-            if idx and dt.date.fromisoformat(day) - dt.date.fromisoformat(price_days[idx - 1]) <= dt.timedelta(days=5):
+            # Prefer the explicit day-over-day percentage supplied by the same
+            # historical table. Do not require prior day data for its first row.
+            if reported is not None:
+                rec['change'] = reported
+            elif idx and dt.date.fromisoformat(day) - dt.date.fromisoformat(price_days[idx - 1]) <= dt.timedelta(days=5):
                 prev = history[price_days[idx - 1]][key]['close']
                 rec['change'] = round((rec['close'] / prev - 1) * 100, 6)
-            elif reported is not None:
-                rec['change'] = reported
             else:
-                rec['change'] = None
+                rec['change'] = numeric(rec.get('change'))
     final = []
     for day in sorted(history, reverse=True):
         out = {'date': day}
@@ -303,7 +313,7 @@ def main():
     if len(rows) < 25:
         raise ValueError('US market history insufficient')
     result = {'updated_at': dt.datetime.now(dt.timezone.utc).isoformat(timespec='seconds'),
-              'source': {'us': 'Yahoo Finance unofficial', 'japan_indices': 'kabubusho API (opt-in)',
+              'source': {'us': 'Yahoo Finance unofficial', 'japan_indices': 'stock-marketdata.com index history (opt-in)',
                          'japan_volume': 'stock-marketdata.com (opt-in)'},
               'tse_enabled': ALLOW, 'rows': rows, 'tse_rows': tse_rows,
               'tse_index_snapshots': snapshots}
