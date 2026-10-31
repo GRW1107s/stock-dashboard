@@ -1,52 +1,48 @@
-name: Update QQQ-SPY and publish Pages
-
+name: Update market dashboard and publish Pages
 on:
   push:
     branches: [main]
+    paths:
+      - 'index.html'
+      - 'scripts/update_data.py'
+      - '.github/workflows/pages.yml'
   workflow_dispatch:
   schedule:
     - cron: '17 1,8 * * 2-6'
-
 permissions:
   contents: read
   pages: write
   id-token: write
-
 concurrency:
-  group: "pages"
+  group: pages
   cancel-in-progress: false
-
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Fetch stock prices
+      - name: Fetch & validate market data
+        env:
+          ALLOW_TSE_THIRD_PARTY_DATA: ${{ vars.ALLOW_TSE_THIRD_PARTY_DATA }}
         run: python scripts/update_data.py
-      - name: Prepare static site
+      - name: Stage Pages site
         run: |
           mkdir -p site
           cp index.html data.json site/
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-      - name: Upload site files
-        uses: actions/upload-pages-artifact@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
         with:
           path: site
   deploy:
+    needs: build
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
-    timeout-minutes: 10
     steps:
-      - name: Deploy GitHub Pages
-        id: deployment
+      - id: deployment
         uses: actions/deploy-pages@v4
