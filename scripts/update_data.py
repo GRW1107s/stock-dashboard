@@ -363,10 +363,24 @@ def main():
                      'sp500': us['sp500'][day], 'nasdaq': us['nasdaq'][day]})
     if len(rows) < 25:
         raise ValueError('US market history insufficient')
+    # 49 clean sessions are required to display fully warmed-up 25-day
+    # distribution counts across all 25 history columns.
+    valid_tse_days = sorted(
+        r['date'] for r in tse_rows
+        if all(numeric(snapshots.get(k, {}).get(r['date'], {}).get('close')) is not None
+               and numeric(r.get(k, {}).get('volume')) is not None
+               and numeric(r.get(k, {}).get('change')) is not None
+               for k in MARKETS)
+    )
+    coverage = {'available': len(valid_tse_days), 'required': 49,
+                'complete': len(valid_tse_days) >= 49,
+                'earliest': valid_tse_days[0] if valid_tse_days else None,
+                'latest': valid_tse_days[-1] if valid_tse_days else None}
+    print('TSE DD COVERAGE:', coverage)
     result = {'updated_at': dt.datetime.now(dt.timezone.utc).isoformat(timespec='seconds'),
               'source': {'us': 'Yahoo Finance unofficial', 'japan_indices': 'stock-marketdata.com index history (opt-in)',
                          'japan_volume': 'stock-marketdata.com (opt-in)'},
-              'tse_enabled': ALLOW, 'rows': rows, 'tse_rows': tse_rows,
+              'tse_enabled': ALLOW, 'tse_dd_coverage': coverage, 'rows': rows, 'tse_rows': tse_rows,
               'tse_index_snapshots': snapshots}
     (ROOT / 'data.json').write_text(json.dumps(result, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     print('WROTE data.json: US rows', len(rows), 'JP rows', len(tse_rows), 'JP index snapshots', {k: len(v) for k,v in snapshots.items()})
