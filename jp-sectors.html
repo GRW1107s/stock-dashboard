@@ -32,22 +32,19 @@
 .history,.table-wrap{width:100%;max-width:none}
 .sector-table{width:100%;min-width:2300px;table-layout:fixed}.sector-table col.date-col{width:85px}.sector-table col.judge-col{width:32px}.history-row{grid-template-columns:190px minmax(0,1fr)}.rank-panel h2{font-size:12px}
 
-.signal-cell{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1.1}
-.signal-dd,.signal-ra{max-width:100%;border-radius:2px;padding:1px 2px;font-weight:700;font-size:9px;white-space:nowrap}
-.signal-dd{background:#fee2e2;color:#b91c1c}.signal-ra{background:#dbeafe;color:#1d4ed8}
-.history .block{height:19px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:8px;line-height:9px;font-weight:700;white-space:nowrap}
-.history .block.buy,.history .block.sell,.history .block.ftd{color:#fff}
-.history .block.ra-block{background:#bfdbfe;color:#1e40af}
-
-/* Latest summary: DD, RA, FTD only. Keep RA consistently yellow. */
+.signal-cell{display:flex;align-items:center;justify-content:center}
+.dd-dot{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;min-width:17px;width:17px;height:17px;flex:0 0 17px;border-radius:50%;background:#dc2626;color:white;font-size:10px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1;vertical-align:middle}
 .card .counts{display:flex;justify-content:center;align-items:center;gap:12px;flex-wrap:wrap;color:inherit}
-.dd-count{color:#dc2626;font-weight:700}.ra-count{color:#ca8a04;font-weight:700}.ftd-count{color:#15803d;font-weight:700}
-.signal-ra{background:#fef3c7;color:#a16207}
-.history .block.ra-block{background:#fde68a;color:#92400e}
+.dd-count,.ftd-count{display:inline-flex;gap:4px;align-items:center;font-weight:700}
+.dd-count{color:#dc2626}.ftd-count{color:#15803d}
+.history .block{height:19px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;white-space:nowrap}
+.history .block.buy,.history .block.sell,.history .block.ftd{color:white}
+.history .block.sell.dd-numbered{background:transparent}
+.history .block.dd-numbered .dd-dot{width:15px;min-width:15px;height:15px;flex-basis:15px;font-size:9px}
 </style></head><body><main><nav class="page-tabs" aria-label="ページ切り替え"><a href="./index.html">市場概況</a><a href="./sectors.html">米国セクター概況</a><a href="./jp-sectors.html" aria-current="page">日本セクター概況</a></nav>
 <h1>日本セクター概況｜TOPIX-17</h1><p class="sub">国内17業種の連動ETF（1617〜1633）で見る騰落率・出来高増減率・簡易判定</p>
 <div class="guide"><span class="dot buy">✓</span> 買い集め：上昇＋出来高増加　 <span class="dot sell">×</span> 売り抜け：−0.20%以下＋出来高増加　 <span class="ftd">FTD</span> 反発試行4日目以降に+1.25%以上＋出来高増加<br><span class="muted">「強さ」はTOPIX-17連動ETFとTOPIX連動ETF（1306）の市場価格騰落率の差（％ポイント）。判定はETF自身の取引量に基づく独自の簡易指標で、業種全体への資金流入を示すものではありません。出来高が少ないETFでは値動きと判定が不安定になり得ます。</span></div>
-<p class="info">RA1〜は反発試行の経過日数、DD1〜は過去25取引日の有効な売り抜け日件数（DD終値から5%上昇で失効）。IBD公式判定ではない簡易版で、Stalling Dayは未算入。</p>
+<p class="info">赤い丸数字は、その日時点の有効DD件数（過去25取引日、DD終値から5%以上上昇すると失効）を示します。IBD公式判定ではない簡易版で、Stalling Dayは含みません。</p>
 <h2 class="period-rankings-title">セクター強さランキング（3・10・25取引日）</h2><p class="rank-leader-legend"><span class="rank-leader-marker" aria-hidden="true"></span>3・10・25日のすべてで上位3分の1（上位6位）を維持したセクター</p><section class="period-rankings" id="period-rankings" aria-label="3・10・25取引日のセクター強さランキング"></section>
 <div class="cards" id="cards"></div>
 <section class="history"><div class="history-title"><strong>直近25取引日の判定履歴</strong><span class="muted">左：新しい → 右：古い</span></div><div class="history-scroll"><div class="history-matrix" id="histories"></div></div><div class="legend"><span><i class="square buy"></i>買い集め</span><span><i class="square sell"></i>売り抜け</span><span><i class="square ftd"></i>FTD</span><span><i class="square"></i>通常・未判定</span></div></section>
@@ -55,7 +52,23 @@
 <div class="table-wrap"><table class="sector-table"><colgroup id="sector-cols"></colgroup><thead><tr id="headrow"><th rowspan="2" class="date">日本日付</th></tr><tr id="subhead"></tr></thead><tbody id="body"><tr><td>読み込み中...</td></tr></tbody></table></div><p class="info" id="status"></p><p class="info">※ 1617〜1633（NEXT FUNDS TOPIX-17連動ETF）、ベンチマークは1306（TOPIX連動ETF）。約250取引日を計算用に取得し、最新200取引日を公開。最新日のデータは日本市場の引け後に反映されます。</p>
 </main><script>
 let rows=[],names={};const hasNum=v=>typeof v==='number'&&Number.isFinite(v);const fmt=v=>hasNum(v)?(v>0?'+':'')+v.toFixed(2)+'%':'—';const cls=v=>!hasNum(v)?'na':v>0?'pos':v<0?'neg':'';const keys=()=>Object.keys(names);
-function badge(v){const p=[];if(v?.dd_number)p.push('<span class="signal-dd">DD'+v.dd_number+'</span>');else if(v?.judge==='sell')p.push('<span class="dot sell">×</span>');if(v?.judge==='ftd')p.push('<span class="ftd">FTD</span>');else if(v?.judge==='buy')p.push('<span class="dot buy">✓</span>');if(v?.ra_day)p.push('<span class="signal-ra">RA'+v.ra_day+'</span>');if(!p.length)p.push('<span class="na">—</span>');return '<span class="signal-cell">'+p.join('')+'</span>'}
+function ddCircle(number){
+  if(typeof number!=='number'||!Number.isInteger(number)||number<0)return '<span class="na">—</span>';
+  return '<span class="dd-dot" title="有効DD '+number+'件" aria-label="DD '+number+'件">'+number+'</span>';
+}
+function badge(v){
+  if(v?.dd_number)return '<span class="signal-cell">'+ddCircle(v.dd_number)+'</span>';
+  if(v?.judge==='sell')return '<span class="dot sell">×</span>';
+  if(v?.judge==='ftd')return '<span class="ftd">FTD</span>';
+  if(v?.judge==='buy')return '<span class="dot buy">✓</span>';
+  return '<span class="na">—</span>';
+}
+function historyMark(v){
+  if(!v)return '';
+  if(v.judge==='ftd')return '<span class="ftd">FTD</span>';
+  if(v.dd_number)return ddCircle(v.dd_number);
+  return '';
+}
 function historyMark(v){if(!v)return '';const p=[];if(v.judge==='ftd')p.push('FTD');else if(v.dd_number)p.push('DD'+v.dd_number);if(v.ra_day)p.push('RA'+v.ra_day);return p.map(x=>'<span>'+x+'</span>').join('')}
 function compoundedReturns(changes){if(changes.length===0||changes.some(v=>!hasNum(v)||v<=-100))return null;return (changes.reduce((product,v)=>product*(1+v/100),1)-1)*100}
 function buildPeriodRanks(period) {
@@ -169,7 +182,7 @@ function drawRankingArrows() {
   }
 }
 window.addEventListener('resize', () => requestAnimationFrame(drawRankingArrows));
-function renderSummary(){document.getElementById('cards').innerHTML=keys().map(k=>{const latest=rows[0]?.sectors?.[k];const recent=rows.slice(0,25).map(r=>r.sectors?.[k]).filter(Boolean);const ftd=recent.filter(x=>x.judge==='ftd').length;const vs=latest?.vs_topix;return `<div class="card"><b>${names[k]}（${k}）</b><div class="tiny">最新 ${fmt(latest?.change)} ｜ TOPIX比 <span class="${cls(vs)}">${hasNum(vs)?(vs>0?'+':'')+vs.toFixed(2)+'pp':'—'}</span></div><div class="counts"><span class="dd-count">DD ${latest?.dd_count??'—'}</span><span class="ra-count">RA ${latest?.ra_day??'—'}</span><span class="ftd-count">FTD ${ftd}</span></div><div class="tiny">当日相対順位 ${latest?.rank||'—'}/${keys().length}</div></div>`}).join('');const selected=rows.slice(0,25);const aligned=selected.concat(Array.from({length:25-selected.length},()=>null));const dates=aligned.map(r=>`<span class="history-date">${r?r.date.slice(5).replace('-','/'):'—'}</span>`).join('');const head=`<div class="history-row"><strong class="history-date-label">日本日付</strong><div class="blocks">${dates}</div></div>`;const lines=keys().map(k=>{const squares=aligned.map(r=>{const v=r?.sectors?.[k];const kind=['buy','sell','ftd'].includes(v?.judge)?v.judge:'';const title=`${r?.date||'—'} ${k} DD ${v?.dd_count??'—'}件 RA ${v?.ra_day??'—'}日目 変動率${fmt(v?.change)} 出来高${fmt(v?.volume)} TOPIX比${hasNum(v?.vs_topix)?v.vs_topix.toFixed(2)+'pp':'—'}`;return `<span class="block ${kind} ${v?.ra_day&&!kind?'ra-block':''}" title="${title}">${historyMark(v)}</span>`}).join('');return `<div class="history-row"><strong>${names[k]}（${k}）</strong><div class="blocks">${squares}</div></div>`}).join('');document.getElementById('histories').innerHTML=head+lines}
+function renderSummary(){document.getElementById('cards').innerHTML=keys().map(k=>{const latest=rows[0]?.sectors?.[k];const recent=rows.slice(0,25).map(r=>r.sectors?.[k]).filter(Boolean);const ftd=recent.filter(x=>x.judge==='ftd').length;const vs=latest?.vs_topix;return `<div class="card"><b>${names[k]}（${k}）</b><div class="tiny">最新 ${fmt(latest?.change)} ｜ TOPIX比 <span class="${cls(vs)}">${hasNum(vs)?(vs>0?'+':'')+vs.toFixed(2)+'pp':'—'}</span></div><div class="counts"><span class="dd-count">DD ${ddCircle(latest?.dd_count)}</span><span class="ftd-count">FTD ${ftd}</span></div><div class="tiny">当日相対順位 ${latest?.rank||'—'}/${keys().length}</div></div>`}).join('');const selected=rows.slice(0,25);const aligned=selected.concat(Array.from({length:25-selected.length},()=>null));const dates=aligned.map(r=>`<span class="history-date">${r?r.date.slice(5).replace('-','/'):'—'}</span>`).join('');const head=`<div class="history-row"><strong class="history-date-label">日本日付</strong><div class="blocks">${dates}</div></div>`;const lines=keys().map(k=>{const squares=aligned.map(r=>{const v=r?.sectors?.[k];const kind=['buy','sell','ftd'].includes(v?.judge)?v.judge:'';const title=`${r?.date||'—'} ${k} DD ${v?.dd_count??'—'}件 変動率${fmt(v?.change)} 出来高${fmt(v?.volume)} TOPIX比${hasNum(v?.vs_topix)?v.vs_topix.toFixed(2)+'pp':'—'}`;return `<span class="block ${kind} ${v?.dd_number?'dd-numbered':''}" title="${title}">${historyMark(v)}</span>`}).join('');return `<div class="history-row"><strong>${names[k]}（${k}）</strong><div class="blocks">${squares}</div></div>`}).join('');document.getElementById('histories').innerHTML=head+lines}
 function priceCell(v){if(!v)return '<span class="na">—</span>';return `<div class="price ${cls(v.change)}">${fmt(v.change)}</div><div class="vol">(${fmt(v.volume)})</div>`}
 function rowHtml(r){return `<tr><td class="date">${r.date.replaceAll('-','/')}</td>${keys().map(k=>{const v=r.sectors?.[k];return `<td>${priceCell(v)}</td><td>${badge(v)}</td>`}).join('')}</tr>`}
 let lastUpdated='';function display(n,button){document.querySelectorAll('.controls button').forEach(x=>x.classList.toggle('active',x===button));const view=n?rows.slice(0,n):rows;document.getElementById('body').innerHTML=view.length?view.map(rowHtml).join(''):'<tr><td colspan="35">データがありません</td></tr>';document.getElementById('status').textContent=`${view.length}行表示 / 全${rows.length}行${lastUpdated?' / 最終更新 '+lastUpdated:''}`}
