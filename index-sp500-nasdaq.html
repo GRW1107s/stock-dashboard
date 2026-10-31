@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>米国市場 日次騰落率</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f8fafc; color: #1e293b; font-family: Arial, "Noto Sans JP", sans-serif; }
+  main { max-width: 1100px; margin: 32px auto; padding: 0 14px; }
+  h1 { font-size: 24px; margin-bottom: 8px; }
+  .subtitle, .info { color: #64748b; font-size: 13px; }
+  .description { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 18px; margin-top: 20px; font-size: 13px; line-height: 1.6; }
+  .description p { margin: 5px 0; }
+  .description small { display: block; margin-top: 10px; color: #64748b; }
+  .controls { display: flex; gap: 8px; margin: 20px 0 14px; flex-wrap: wrap; }
+  button { padding: 9px 15px; border: 1px solid #cbd5e1; background: #fff; border-radius: 7px; cursor: pointer; }
+  button.active { background: #1e293b; color: #fff; }
+  .table-box { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 630px; text-align: center; }
+  thead th { background: #f1f5f9; color: #475569; padding: 12px 8px; font-size: 13px; white-space: nowrap; }
+  thead tr:first-child th { font-size: 14px; border-bottom: 1px solid #cbd5e1; }
+  thead tr:first-child th:not(:first-child) { border-left: 1px solid #e2e8f0; }
+  thead tr:nth-child(2) th:nth-child(3) { border-left: 1px solid #e2e8f0; }
+  tbody td { padding: 11px 8px; border-top: 1px solid #e2e8f0; font-size: 13px; white-space: nowrap; }
+  tbody td:nth-child(2), tbody td:nth-child(4) { border-left: 1px solid #e2e8f0; }
+  tbody tr:nth-child(even) { background: #fafbfc; }
+  .date, .volume { color: #475569; font-variant-numeric: tabular-nums; }
+  .pct { display: inline-block; padding: 6px; min-width: 77px; border-radius: 6px; font-weight: bold; font-variant-numeric: tabular-nums; }
+  .up { color: #15803d; background: #dcfce7; }
+  .down { color: #dc2626; background: #fee2e2; }
+  .flat { color: #475569; background: #e2e8f0; }
+  .mark { display: inline-flex; align-items: center; justify-content: center; width: 21px; height: 21px; border-radius: 50%; margin-left: 6px; font-size: 14px; font-weight: 700; vertical-align: middle; line-height: 1; }
+  .mark.buy { color: #15803d; background: #dcfce7; }
+  .mark.sell { color: #dc2626; background: #fee2e2; }
+  .info { margin-top: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>米国市場 日次騰落率</h1>
+  <p class="subtitle">S&P500・NASDAQ総合｜騰落率と出来高前日比</p>
+  <div class="description">
+    <p><span class="mark buy" aria-label="買い集め">✓</span> <strong>買い集め日：</strong>指数が前営業日比で上昇し、出来高も前営業日より増加した日。</p>
+    <p><span class="mark sell" aria-label="売り抜け">×</span> <strong>売り抜け日：</strong>指数が前営業日比で0.20%以上下落し、出来高も前営業日より増加した日。</p>
+    <small>※ IBDの考え方を参考にした簡易判定です。出来高が欠損している場合は判定しません。機関投資家の売買を直接確認したものではありません。</small>
+  </div>
+  <div class="controls">
+    <button class="active" onclick="showRows(25,this)">直近25取引日</button>
+    <button onclick="showRows(90,this)">直近90取引日</button>
+    <button onclick="showRows(0,this)">すべて</button>
+  </div>
+  <div class="table-box">
+    <table>
+      <thead>
+        <tr><th rowspan="2">日付</th><th colspan="2">S&P500</th><th colspan="2">NASDAQ総合</th></tr>
+        <tr><th>騰落率</th><th>出来高</th><th>騰落率</th><th>出来高</th></tr>
+      </thead>
+      <tbody id="data-body"><tr><td colspan="5">読み込み中...</td></tr></tbody>
+    </table>
+  </div>
+  <p id="count" class="info"></p>
+  <p id="updated" class="info"></p>
+  <p class="info">出来高は前営業日比（%）。米国市場の終値ベース。データ元：Yahoo Finance（非公式API）</p>
+</main>
+<script>
+let allData = [];
+function pct(value, volume = null) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '<span class="pct flat">—</span>';
+  const cls = value > 0 ? 'up' : value < 0 ? 'down' : 'flat';
+  const sign = value > 0 ? '+' : '';
+  let mark = '';
+  if (typeof volume === 'number' && Number.isFinite(volume) && volume > 0) {
+    if (value > 0) mark = '<span class="mark buy" title="買い集め日" aria-label="買い集め日">✓</span>';
+    else if (value <= -0.20) mark = '<span class="mark sell" title="売り抜け日" aria-label="売り抜け日">×</span>';
+  }
+  return `<span class="pct ${cls}">${sign}${value.toFixed(2)}%</span>${mark}`;
+}
+function volumePct(value) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
+  return `<span class="volume">${value > 0 ? '+' : ''}${value.toFixed(2)}%</span>`;
+}
+function showRows(limit, button) {
+  if (button) {
+    document.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    button.classList.add('active');
+  }
+  const rows = limit === 0 ? allData : allData.slice(0,limit);
+  const body = document.getElementById('data-body');
+  body.innerHTML = rows.length ? rows.map(r => `
+    <tr>
+      <td class="date">${r.date.replace(/-/g, '/')}</td>
+      <td>${pct(r.sp500, r.sp500_volume)}</td>
+      <td>${volumePct(r.sp500_volume)}</td>
+      <td>${pct(r.nasdaq, r.nasdaq_volume)}</td>
+      <td>${volumePct(r.nasdaq_volume)}</td>
+    </tr>`).join('') : '<tr><td colspan="5">表示できるデータがありません</td></tr>';
+  document.getElementById('count').textContent = `${rows.length}件表示 / 全${allData.length}件`;
+}
+fetch('./data.json?t=' + Date.now(), {cache:'no-store'})
+  .then(response => { if (!response.ok) throw Error('データ取得失敗'); return response.json(); })
+  .then(data => {
+    if (!Array.isArray(data.rows)) throw Error('データ形式が不正です');
+    allData = data.rows.filter(r =>
+      typeof r.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(r.date) &&
+      typeof r.sp500 === 'number' && Number.isFinite(r.sp500) &&
+      typeof r.nasdaq === 'number' && Number.isFinite(r.nasdaq)
+    ).sort((a,b) => b.date.localeCompare(a.date));
+    showRows(25);
+    if (data.updated_at) {
+      const t = new Date(data.updated_at);
+      if (!Number.isNaN(t.getTime())) document.getElementById('updated').textContent =
+        '最終更新：' + t.toLocaleString('ja-JP', {timeZone:'Asia/Tokyo'});
+    }
+  })
+  .catch(error => {
+    document.getElementById('data-body').innerHTML = '<tr><td colspan="5">データを読み込めませんでした。GitHub Actionsを確認してください。</td></tr>';
+    console.error(error);
+  });
+</script>
+</body>
+</html>
