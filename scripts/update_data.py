@@ -75,6 +75,7 @@ def enrich_us(prices):
     dates = sorted(prices)
     series = {}
     state, attempt_days, base_low = 'normal', 0, None
+    attempt_history = []
     for i, date in enumerate(dates):
         item = prices[date]
         prev = prices[dates[i - 1]] if i else None
@@ -95,14 +96,22 @@ def enrich_us(prices):
                     base_low = prices[dates[i - 1]]['low'] if i else None
                     state, attempt_days = ('attempt', 1) if base_low is not None else ('correction', 0)
                     ra_day = 1 if state == 'attempt' else None
+                    attempt_history = [date] if ra_day else []
             elif state == 'attempt':
                 if low < base_low:
+                    # The attempt failed. Remove its earlier RA labels retroactively,
+                    # while preserving price, DD, and other signal history.
+                    for failed_date in attempt_history:
+                        series[failed_date]['ra_day'] = None
+                    attempt_history = []
                     state, base_low, attempt_days = 'correction', low, 0
                 else:
                     attempt_days += 1
                     ra_day = attempt_days
+                    attempt_history.append(date)
                     if attempt_days >= 4 and change is not None and change >= 1.25 and vchange is not None and vchange > 0:
                         judge, state = 'ftd', 'confirmed'
+                        attempt_history = []  # A completed RA sequence remains visible.
         series[date] = {'change': round(change, 6) if change is not None else None,
                         'volume': round(vchange, 6) if vchange is not None else None,
                         'judge': judge, 'ra_day': ra_day}
