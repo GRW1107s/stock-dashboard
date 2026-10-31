@@ -5,12 +5,16 @@ on:
     paths:
       - 'index.html'
       - 'sectors.html'
+      - 'jp-sectors.html'
       - 'scripts/update_sectors.py'
+      - 'scripts/update_jp_sectors.py'
       - 'scripts/update_data.py'
+      - 'jp-sectors.json'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
   schedule:
-    - cron: '17 1,8 * * 2-6'
+    - cron: '17 1 * * 2-6'  # US close: JST 10:17 Tue-Sat
+    - cron: '17 8 * * 1-5'  # Japan close: JST 17:17 Mon-Fri
 permissions:
   contents: read
   pages: write
@@ -33,10 +37,13 @@ jobs:
         run: python scripts/update_data.py
       - name: Fetch 11 sector ETFs
         run: python scripts/update_sectors.py
+      - name: Fetch 17 Japanese sector ETFs
+        continue-on-error: true  # One failed external data feed must not take down existing pages.
+        run: python scripts/update_jp_sectors.py
       - name: Stage Pages site
         run: |
           mkdir -p site
-          cp index.html data.json sectors.html sectors.json site/
+          cp index.html data.json sectors.html sectors.json jp-sectors.html jp-sectors.json site/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
