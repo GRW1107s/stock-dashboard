@@ -1,19 +1,156 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Stock Dashboard</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f8fafc" />
+  <title>QQQ・SPY 日次騰落率</title>
   <style>
-    body { background:#0b1220; color:white; font-family:Arial,sans-serif; padding:30px; }
-    h1 { color:#67e8f9; }
-    .card { background:#182338; border-radius:12px; padding:20px; margin-top:15px; }
+    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #1f2937; background: #f8fafc; }
+    main { width: min(100%, 760px); margin: 34px auto 56px; padding: 0 16px; }
+    header h1 { margin: 0 0 6px; font-size: clamp(22px, 4vw, 29px); letter-spacing: -0.035em; }
+    .subtitle { margin: 0; color: #64748b; font-size: 13px; line-height: 1.7; }
+    .controls { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin: 22px 0 12px; }
+    .tabs { display: inline-flex; gap: 4px; background: #e9eef5; border-radius: 10px; padding: 4px; }
+    button { cursor: pointer; border: 0; border-radius: 7px; color: #475569; padding: 9px 13px; background: transparent; font-size: 13px; font-weight: 650; }
+    button[aria-pressed="true"] { color: #0f172a; background: white; box-shadow: 0 1px 3px #0f172a12; }
+    button:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+    .count { color: #64748b; font-size: 12px; }
+    .panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 6px 26px #0f172a06; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    thead th { text-align: center; height: 44px; color: #6b7280; background: #f8fafc; font-size: 11px; font-weight: 750; letter-spacing: .06em; }
+    thead th:first-child { text-align: left; padding-left: 20px; }
+    tbody tr { border-top: 1px solid #edf0f4; }
+    tbody tr:nth-child(even) { background: #fbfcfd; }
+    tbody td { text-align: center; height: 51px; padding: 7px 5px; }
+    tbody td:first-child { text-align: left; padding-left: 20px; color: #64748b; font-variant-numeric: tabular-nums; font-size: 12px; white-space: nowrap; }
+    .pill { display: inline-block; min-width: 87px; border: 1px solid; border-radius: 6px; padding: 5px 7px; font-size: 12px; font-weight: 750; font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-variant-numeric: tabular-nums; }
+    .up { color: #179447; background: #eefaf2; border-color: #d1efdc; }
+    .down { color: #e23d32; background: #fff2f1; border-color: #ffd4d0; }
+    .flat { color: #596579; background: #f1f5f9; border-color: #e2e8f0; }
+    .message { padding: 26px 20px; text-align: center; color: #64748b; line-height: 1.7; font-size: 14px; }
+    .message.error { color: #b91c1c; }
+    footer { margin-top: 14px; color: #64748b; font-size: 12px; line-height: 1.8; }
+    @media (max-width: 420px) {
+      main { margin-top: 22px; padding: 0 10px; }
+      tbody td:first-child, thead th:first-child { padding-left: 13px; }
+      .pill { min-width: 74px; font-size: 11px; padding: 5px 4px; }
+      button { padding: 8px 10px; }
+    }
   </style>
 </head>
 <body>
-  <h1>Stock Dashboard</h1>
-  <p>S&P500 / NASDAQ100 株価分析</p>
-  <div class="card">ここにS&P500のヒートマップを表示</div>
-  <div class="card">ここにNASDAQ100のヒートマップを表示</div>
+  <main>
+    <header>
+      <h1>QQQ / SPY 日次騰落率</h1>
+      <p class="subtitle">米国市場の終値ベース｜前営業日比｜新しい日付順</p>
+    </header>
+    <div class="controls">
+      <div class="tabs" aria-label="表示件数">
+        <button type="button" data-limit="30" aria-pressed="true">直近30日</button>
+        <button type="button" data-limit="90" aria-pressed="false">直近90日</button>
+        <button type="button" data-limit="all" aria-pressed="false">すべて</button>
+      </div>
+      <span id="count" class="count" aria-live="polite">読み込み中…</span>
+    </div>
+    <section class="panel" aria-label="QQQとSPYの日次騰落率一覧">
+      <table>
+        <thead><tr><th scope="col">DATE</th><th scope="col">QQQ</th><th scope="col">SPY</th></tr></thead>
+        <tbody id="rows"><tr><td colspan="3" class="message">データを読み込んでいます…</td></tr></tbody>
+      </table>
+    </section>
+    <footer>
+      <div id="updated">最終データ取得：確認中</div>
+      <div>QQQ：NASDAQ-100連動ETF ／ SPY：S&amp;P500連動ETF</div>
+      <div>終値から計算した騰落率です。配当・分割調整後のトータルリターンではありません。データ提供元：Yahoo Finance（非公式API）。</div>
+    </footer>
+  </main>
+  <script>
+    (() => {
+      'use strict';
+      const tbody = document.getElementById('rows');
+      const count = document.getElementById('count');
+      const updated = document.getElementById('updated');
+      const buttons = Array.from(document.querySelectorAll('[data-limit]'));
+      let allRows = [];
+      let limit = '30';
+
+      function dateLabel(value) {
+        return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.replaceAll('-', '/') : String(value ?? '');
+      }
+      function percent(value) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return null;
+        return `${n > 0 ? '+' : n < 0 ? '-' : ''}${Math.abs(n).toFixed(2)}%`;
+      }
+      function makeCell(value) {
+        const cell = document.createElement('td');
+        const span = document.createElement('span');
+        const n = Number(value);
+        span.className = `pill ${n > 0 ? 'up' : n < 0 ? 'down' : 'flat'}`;
+        span.textContent = percent(value) ?? '—';
+        cell.append(span);
+        return cell;
+      }
+      function message(text, isError = false) {
+        tbody.replaceChildren();
+        const row = document.createElement('tr');
+        const cell = document.createElement('td');
+        cell.colSpan = 3;
+        cell.className = `message${isError ? ' error' : ''}`;
+        cell.textContent = text;
+        row.append(cell);
+        tbody.append(row);
+      }
+      function render() {
+        if (allRows.length === 0) {
+          count.textContent = '0件';
+          message('株価データがまだありません。GitHub Actionsの実行結果を確認してください。');
+          return;
+        }
+        const visible = limit === 'all' ? allRows : allRows.slice(0, Number(limit));
+        const fragment = document.createDocumentFragment();
+        for (const data of visible) {
+          const row = document.createElement('tr');
+          const date = document.createElement('td');
+          date.textContent = dateLabel(data.date);
+          row.append(date, makeCell(data.qqq), makeCell(data.spy));
+          fragment.append(row);
+        }
+        tbody.replaceChildren(fragment);
+        count.textContent = `${visible.length}件 / 全${allRows.length}件`;
+      }
+      buttons.forEach(button => button.addEventListener('click', () => {
+        limit = button.dataset.limit;
+        buttons.forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+        render();
+      }));
+      fetch(`./data.json?v=${Date.now()}`, { cache: 'no-store' })
+        .then(response => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return response.json();
+        })
+        .then(data => {
+          if (!Array.isArray(data.rows)) throw new Error('データ形式が正しくありません');
+          allRows = data.rows
+            .filter(row => /^\d{4}-\d{2}-\d{2}$/.test(row.date) && Number.isFinite(row.qqq) && Number.isFinite(row.spy))
+            .sort((a, b) => b.date.localeCompare(a.date));
+          if (data.updated_at) {
+            const timestamp = new Date(data.updated_at);
+            if (!Number.isNaN(timestamp.valueOf())) {
+              updated.textContent = `最終データ取得：${new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', dateStyle: 'medium', timeStyle: 'short' }).format(timestamp)}（日本時間）`;
+            }
+          }
+          render();
+        })
+        .catch(err => {
+          count.textContent = '取得エラー';
+          updated.textContent = 'データの読み込みに失敗しました';
+          message(`株価データを読み込めませんでした。GitHub Actionsの実行状況を確認してください。（${err.message}）`, true);
+        });
+    })();
+  </script>
 </body>
 </html>
