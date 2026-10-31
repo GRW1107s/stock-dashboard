@@ -59,6 +59,7 @@ def enrich(prices):
     state='normal'
     attempt_days=0
     base_low=None
+    attempt_history=[]
     for i,day in enumerate(dates):
         x=prices[day]
         prev=prices[dates[i-1]] if i else None
@@ -81,14 +82,21 @@ def enrich(prices):
                     if p is not None:
                         state,base_low,attempt_days='attempt',p,1
                         ra_day=1
+                        attempt_history=[day]
             elif state=='attempt':
                 if low<base_low:
+                    # Hide the whole RA sequence once this rally attempt has failed.
+                    for failed_day in attempt_history:
+                        series[failed_day]['ra_day']=None
+                    attempt_history=[]
                     state,base_low,attempt_days='correction',low,0
                 else:
                     attempt_days+=1
                     ra_day=attempt_days
+                    attempt_history.append(day)
                     if attempt_days>=4 and change is not None and change>=1.25 and volume is not None and volume>0:
                         judge,state='ftd','confirmed'
+                        attempt_history=[]  # Keep completed RA labels visible.
         series[day]={'change':round(change,4) if change is not None else None,'volume':round(volume,4) if volume is not None else None,'judge':judge,'close':x['close'],'ra_day':ra_day}
     # DD count: previous 25 sessions, dropping a DD after a 5% recovery.
     # This is a transparent simplified count; IBD stalling-day criteria are excluded.
