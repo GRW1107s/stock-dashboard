@@ -45,7 +45,7 @@ def yahoo_fetch(symbol, zone):
                     close_time = dt.time(16, 15) if zone == 'America/New_York' else dt.time(15, 45)
                     if date == now.date() and now.time() < close_time:
                         continue
-                    result[date.isoformat()] = {'close': close, 'low': valid_number(low) or close, 'volume': valid_number(volume)}
+                    result[date.isoformat()] = {'close': close, 'low': valid_number(low), 'volume': valid_number(volume)}
                 if len(result) < 30:
                     raise ValueError(f'Only {len(result)} records')
                 print(f'Yahoo {symbol}: {len(result)} sessions')
@@ -77,7 +77,7 @@ def stooq_fetch(symbol):
         dt.date.fromisoformat(date)
         if date == today.date().isoformat() and today.time() < dt.time(15, 45):
             continue
-        records[date] = {'close': close, 'low': valid_number(row.get('Low')) or close, 'volume': valid_number(row.get('Volume'))}
+        records[date] = {'close': close, 'low': valid_number(row.get('Low')), 'volume': valid_number(row.get('Volume'))}
     if len(records) < 30:
         raise ValueError(f'Stooq {symbol}: insufficient data ({len(records)})')
     print(f'Stooq {symbol}: {len(records)} sessions, {sum(v["volume"] is not None for v in records.values())} with volume')
@@ -85,37 +85,77 @@ def stooq_fetch(symbol):
 
 
 def enrich(raw):
+    """IBD-inspired rally attempt / FTD, with Day-1 intraday low as fixed stop.
+
+    No FTD is generated when intraday lows or volume are unavailable.
+    A rally attempt ends immediately on any subsequent day's intraday
+    undercut of its Day-1 low, even if that day closes higher.
+    """
     dates = sorted(raw)
     result = {}
     state = 'normal'
     attempt_day = 0
-    attempt_low = recent_low = None
+    attempt_low = None
+    recent_low = None
+
     for i, date in enumerate(dates):
         item = raw[date]
         prev = raw[dates[i - 1]] if i else None
-        pct = (item['close'] / prev['close'] - 1) * 100 if prev else None
-        v, pv = item['volume'], prev['volume'] if prev else None
-        vol_pct = (v / pv - 1) * 100 if v is not None and pv is not None and pv > 0 else None
-        judge = 'buy' if pct is not None and pct > 0 and vol_pct is not None and vol_pct > 0 else ('sell' if pct is not None and pct <= -0.2 and vol_pct is not None and vol_pct > 0 else None)
-        prior_high = max((raw[d]['close'] for d in dates[max(0, i - 60):i]), default=item['close'])
-        correction = item['close'] <= prior_high * 0.95
+        close, low = item['close'], item['low']
+        pct = (close / prev['close'] - 1) * 100 if prev else None
+        volume = item['volume']
+        prev_volume = prev['volume'] if prev else None
+        vol_pct = (volume / prev_volume - 1) * 100 if volume is not None and prev_volume is not None and prev_volume > 0 else None
+        judge = ('buy' if pct is not None and pct > 0 and vol_pct is not None and vol_pct > 0
+                 else 'sell' if pct is not None and pct <= -0.20 and vol_pct is not None and vol_pct > 0
+                 else None)
+        prior_closes = [raw[d]['close'] for d in dates[max(0, i - 60):i]]
+        prior_high = max(prior_closes, default=close)
+        in_correction = close <= prior_high * 0.95
         ftd = False
+
         if state in ('normal', 'confirmed'):
-            if correction:
+            if in_correction:
                 state = 'correction'
-                recent_low = item['low']
+                recent_low = low
+                attempt_day = 0
+                attempt_low = None
         elif state == 'correction':
-            recent_low = min(recent_low, item['low'])
-            if pct is not None and pct > 0:
-                state, attempt_day, attempt_low = 'attempt', 1, recent_low
+            if low is not None:
+                recent_low = min(recent_low, low) if recent_low is not None else low
+            # A closing up-day begins the attempt. Only a genuine day's low
+            # can provide the reference: never substitute the close for Low.
+            if pct is not None and pct > 0 and low is not None:
+                state = 'attempt'
+                attempt_day = 1
+                attempt_low = low  # FTD rally Day 1's low, fixed for this attempt
         elif state == 'attempt':
-            if item['low'] < attempt_low:
-                state, recent_low, attempt_day = 'correction', item['low'], 0
+            if low is None:
+                # Do not produce a confirmation with an unverifiable low.
+                state = 'correction'
+                recent_low = None
+                attempt_low = None
+                attempt_day = 0
+            elif low < attempt_low:
+                state = 'correction'
+                recent_low = low
+                attempt_low = None
+                attempt_day = 0
+                # This day is not reused as a new Day 1: look for a later up day.
             else:
                 attempt_day += 1
-                if attempt_day >= 4 and pct is not None and pct >= 1.25 and vol_pct is not None and vol_pct > 0:
-                    ftd, state = True, 'confirmed'
-        result[date] = {'change': round(pct, 6) if pct is not None else None, 'volume': round(vol_pct, 6) if vol_pct is not None else None, 'judge': 'ftd' if ftd else judge}
+                if (attempt_day >= 4 and pct is not None and pct >= 1.25
+                        and vol_pct is not None and vol_pct > 0):
+                    ftd = True
+                    state = 'confirmed'
+                    attempt_low = None
+                    attempt_day = 0
+
+        result[date] = {
+            'change': round(pct, 6) if pct is not None else None,
+            'volume': round(vol_pct, 6) if vol_pct is not None else None,
+            'judge': 'ftd' if ftd else judge,
+        }
     return result
 
 
