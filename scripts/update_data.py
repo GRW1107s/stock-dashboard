@@ -17,6 +17,9 @@ from zoneinfo import ZoneInfo
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 MARKETS = {'prime': 'TsePrimeMarketIndex', 'standard': 'TseStandardMarketIndex', 'growth': 'TseGrowthMarketIndex'}
 HEADERS = {'User-Agent': 'Mozilla/5.0 (compatible; PersonalMarketDashboard/1.0)', 'Accept': 'application/json,text/html,*/*'}
+FETCH_US_SESSIONS = 250
+PUBLISH_SESSIONS = 200
+
 ALLOW = os.getenv('ALLOW_TSE_THIRD_PARTY_DATA', '').lower() in ('true', '1', 'yes')
 
 
@@ -35,7 +38,10 @@ def numeric(value):
 
 
 def us_prices(symbol):
-    params = urllib.parse.urlencode({'range': '5y', 'interval': '1d'})
+    # Fetch ~400 calendar days (usually >250 trading sessions), without 5-year history.
+    end = int(time.time()) + 86400
+    start = end - 400 * 86400
+    params = urllib.parse.urlencode({'period1': start, 'period2': end, 'interval': '1d'})
     now = dt.datetime.now(ZoneInfo('America/New_York'))
     last_error = None
     for server in ('query1.finance.yahoo.com', 'query2.finance.yahoo.com'):
@@ -55,7 +61,9 @@ def us_prices(symbol):
                     prices[date.isoformat()] = {'close': close, 'low': numeric(low), 'volume': numeric(volume)}
                 if len(prices) < 30:
                     raise ValueError('Too few sessions')
-                print(f'YAHOO {symbol}: {len(prices)} sessions')
+                dates = sorted(prices)
+                prices = {day: prices[day] for day in dates[-FETCH_US_SESSIONS:]}
+                print(f'YAHOO {symbol}: {len(prices)} calculation sessions (published {PUBLISH_SESSIONS})')
                 return prices
             except Exception as e:
                 last_error = e
@@ -268,7 +276,7 @@ def prepare_tse(previous, volume, indices):
             else:
                 rec['change'] = numeric(rec.get('change'))
     final = []
-    for day in sorted(history, reverse=True):
+    for day in sorted(history, reverse=True)[:PUBLISH_SESSIONS]:
         out = {'date': day}
         for key in MARKETS:
             rec = history[day].get(key, {})
@@ -279,8 +287,9 @@ def prepare_tse(previous, volume, indices):
                         'judge': classify(price_change, volume_change),
                         'shares_10000': rec.get('shares_10000')}
         final.append(out)
+    kept_days = set(sorted(history, reverse=True)[:PUBLISH_SESSIONS])
     snapshots = {key: {day: {'close': history[day][key]['close'], 'low': history[day][key].get('low')}
-                       for day in history if key in history[day] and numeric(history[day][key].get('close')) is not None}
+                       for day in kept_days if key in history[day] and numeric(history[day][key].get('close')) is not None}
                  for key in MARKETS}
     return final, snapshots
 
@@ -304,7 +313,7 @@ def main():
     japan_days = sorted(r['date'] for r in tse_rows if r['date'])
     us_days = sorted(set(us['sp500']) & set(us['nasdaq']), reverse=True)
     rows = []
-    for day in us_days:
+    for day in us_days[:PUBLISH_SESSIONS]:
         loc = bisect.bisect_right(japan_days, day)
         # Japan next session relative to a US trading date, no same-day alignment.
         japan = japan_days[loc] if loc < len(japan_days) else None
