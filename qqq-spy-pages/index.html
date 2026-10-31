@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f8fafc">
+<title>QQQ / SPY | 日次騰落率</title>
+<style>
+:root{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans JP",Meiryo,sans-serif;color:#142133;background:#f5f7fa;font-synthesis:none}
+*{box-sizing:border-box} body{margin:0} button{font:inherit;cursor:pointer}
+.shell{width:min(100%,920px);margin:auto;padding:32px 18px 56px}
+.topline{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.eyebrow{color:#52647d;font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+h1{font-size:clamp(23px,4vw,32px);margin:8px 0 4px;letter-spacing:-.035em}
+.subtitle{color:#627187;margin:0 0 24px;font-size:13px;line-height:1.7}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.stat{background:#fff;border:1px solid #e0e6ef;border-radius:12px;padding:16px 18px}
+.stat .label{font-size:12px;color:#738298;font-weight:700;letter-spacing:.02em}
+.stat .main{font-weight:800;font-variant-numeric:tabular-nums;display:block;font-size:25px;margin:8px 0 2px}
+.stat .hint{font-size:12px;color:#7a8798}
+.sheet{background:white;border:1px solid #e1e7ef;border-radius:14px;overflow:hidden;box-shadow:0 3px 18px rgba(18,33,55,.035)}
+.toolbar{padding:15px 18px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;border-bottom:1px solid #e8edf3}
+.toolbar .title{font-weight:800;font-size:15px;letter-spacing:.01em}
+.controls{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.segments{display:flex;background:#f2f5f9;border:1px solid #e7edf4;border-radius:9px;padding:3px;gap:2px}
+.segments button{border:0;border-radius:7px;background:transparent;color:#5b6b7e;padding:7px 12px;font-size:12px;font-weight:700}
+.segments button[aria-pressed="true"]{background:#fff;color:#142133;box-shadow:0 1px 4px rgba(15,23,42,.12)}
+.csv{border:1px solid #dae3ef;background:#fff;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:700;color:#34465c}
+.csv:disabled{opacity:.45;cursor:not-allowed}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;text-align:center;white-space:nowrap;table-layout:fixed}
+thead{background:#fafbfd;position:sticky;top:0;z-index:1}
+th{padding:14px 12px;font-size:11px;letter-spacing:.075em;color:#7d8796;font-weight:800}
+td{padding:13px 12px;border-top:1px solid #edf0f4;font-size:13px}
+tr:nth-child(even){background:#fafbfd}
+.date{color:#667486;font-family:ui-monospace,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums;font-weight:600}
+.pill{display:inline-block;min-width:85px;padding:5px 9px;border-radius:7px;font:800 12px/1.2 ui-monospace,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums;border:1px solid transparent}
+.up{color:#119c52;background:#edf9f1;border-color:#cdebd8}
+.down{color:#df413c;background:#fff1ef;border-color:#f8d4d0}
+.flat{color:#687587;background:#f0f3f7;border-color:#dde3ea}
+.message{padding:40px 20px;color:#627187;text-align:center;font-size:13px;line-height:1.8}
+.footer{margin:16px 2px 0;color:#738298;font-size:12px;line-height:1.85}
+.footer a{color:#476586}
+@media(max-width:520px){.shell{padding:20px 10px 40px}.stat{padding:13px}.stat .main{font-size:22px}.toolbar{padding:14px 12px}.segments button{padding:7px 10px}td{padding:12px 6px}.pill{min-width:72px;font-size:12px;padding:6px 5px}th{padding:12px 6px}}
+</style>
+</head>
+<body>
+<main class="shell">
+  <div class="topline"><span class="eyebrow">Stock Dashboard</span><span class="eyebrow">米国ETF · 日足</span></div>
+  <h1>QQQ / SPY 日次騰落率</h1>
+  <p class="subtitle">米国市場の各営業日の終値を前営業日と比較。日付は米国市場の取引日です。</p>
+  <section class="stats" aria-label="最新営業日の騰落率">
+    <div class="stat"><div class="label">QQQ / NASDAQ-100連動ETF</div><span class="main" id="latest-qqq">—</span><div class="hint" id="latest-qqq-date">最新営業日</div></div>
+    <div class="stat"><div class="label">SPY / S&amp;P 500連動ETF</div><span class="main" id="latest-spy">—</span><div class="hint" id="latest-spy-date">最新営業日</div></div>
+  </section>
+  <section class="sheet">
+    <div class="toolbar"><div class="title">日次パフォーマンス</div>
+      <div class="controls">
+        <div class="segments" role="group" aria-label="表示期間">
+          <button type="button" data-limit="30" aria-pressed="true">30日</button>
+          <button type="button" data-limit="90" aria-pressed="false">90日</button>
+          <button type="button" data-limit="all" aria-pressed="false">すべて</button>
+        </div>
+        <button type="button" class="csv" id="download" disabled>CSV保存</button>
+      </div>
+    </div>
+    <div class="table-wrap"><table aria-label="QQQとSPYの営業日ごとの騰落率">
+      <thead><tr><th scope="col">DATE</th><th scope="col">QQQ</th><th scope="col">SPY</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="3" class="message">データを読み込み中です…</td></tr></tbody>
+    </table></div>
+  </section>
+  <p class="footer"><span id="status">データを確認しています。</span><br>騰落率 = (当日終値 ÷ 前営業日終値 − 1) × 100。小数点第2位まで表示。配当を含まない価格変動率です。<br>データ：Yahoo Finance（非公式のデータ取得方法）。提供元の制限や遅延により更新できない場合があります。投資判断に使用する際は取引所・証券会社の値も確認してください。</p>
+</main>
+<script>
+(()=>{
+'use strict';
+const tbody=document.getElementById('rows');
+const status=document.getElementById('status');
+const buttons=[...document.querySelectorAll('[data-limit]')];
+let full=[],limit='30';
+const fmtDate=s=>String(s).replace(/-/g,'/');
+const fmtRate=n=>`${n>0?'+':''}${n.toFixed(2)}%`;
+function chip(n){
+  const span=document.createElement('span');
+  span.className='pill '+(n>0?'up':n<0?'down':'flat');
+  span.textContent=fmtRate(n);
+  return span;
+}
+function setLatest(id,value){
+  const elt=document.getElementById(id);
+  elt.textContent=fmtRate(value);
+  elt.style.color=value>0?'#119c52':value<0?'#df413c':'#687587';
+}
+function render(){
+  const shown=limit==='all'?full:full.slice(0,Number(limit));
+  tbody.replaceChildren();
+  if(!shown.length){tbody.innerHTML='<tr><td colspan="3" class="message">表示するデータがありません。</td></tr>';return;}
+  const fragment=document.createDocumentFragment();
+  for(const item of shown){
+    const tr=document.createElement('tr');
+    const date=document.createElement('td');date.className='date';date.textContent=fmtDate(item.date);
+    const qqq=document.createElement('td');qqq.append(chip(item.qqq));
+    const spy=document.createElement('td');spy.append(chip(item.spy));
+    tr.append(date,qqq,spy);fragment.append(tr);
+  }
+  tbody.append(fragment);
+}
+buttons.forEach(btn=>btn.addEventListener('click',()=>{
+  limit=btn.dataset.limit;
+  buttons.forEach(b=>b.setAttribute('aria-pressed',String(b===btn)));
+  render();
+}));
+document.getElementById('download').addEventListener('click',()=>{
+  const shown=limit==='all'?full:full.slice(0,Number(limit));
+  const csv='\uFEFFdate,QQQ (%),SPY (%)\r\n'+shown.map(r=>`${fmtDate(r.date)},${r.qqq.toFixed(2)},${r.spy.toFixed(2)}`).join('\r\n');
+  const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  const a=document.createElement('a');a.href=url;a.download='qqq-spy-daily.csv';a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+});
+fetch('./data.json?cache='+Date.now(),{cache:'no-store'})
+ .then(r=>{if(!r.ok)throw new Error('データファイルがまだありません');return r.json();})
+ .then(data=>{
+   if(!Array.isArray(data.rows)||!data.rows.length)throw new Error('初回データ更新の実行を待っています');
+   full=data.rows.filter(x=>/^\d{4}-\d{2}-\d{2}$/.test(x.date)&&Number.isFinite(x.qqq)&&Number.isFinite(x.spy))
+     .sort((a,b)=>b.date.localeCompare(a.date));
+   if(!full.length)throw new Error('有効なデータがありません');
+   render();
+   const recent=full[0];
+   setLatest('latest-qqq',recent.qqq);setLatest('latest-spy',recent.spy);
+   document.getElementById('latest-qqq-date').textContent=fmtDate(recent.date)+'（米国市場）';
+   document.getElementById('latest-spy-date').textContent=fmtDate(recent.date)+'（米国市場）';
+   document.getElementById('download').disabled=false;
+   let updated='';
+   if(data.updated_at){try{updated=' / 取得日時 '+new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}).format(new Date(data.updated_at))+' JST';}catch(_){}}
+   status.textContent=`${full.length.toLocaleString('ja-JP')}営業日分を表示可能 / 最終データ日 ${fmtDate(recent.date)}${updated}`;
+ }).catch(err=>{
+   tbody.innerHTML='<tr><td colspan="3" class="message">株価データはまだ準備できていません。GitHub Actions の初回実行が成功すると表示されます。</td></tr>';
+   status.textContent=`データ取得待ち：${err.message}`;
+ });
+})();
+</script>
+</body>
+</html>
