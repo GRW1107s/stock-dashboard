@@ -65,6 +65,6 @@ function renderSummary(){
     specs.slice(2).map(judgmentLine).join('');
 }
 function display(n,button){document.querySelectorAll('.controls button').forEach(x=>x.classList.toggle('active',x===button));const view=n?rows.slice(0,n):rows;document.getElementById('body').innerHTML=view.length?view.map(rowHtml).join(''):'<tr><td colspan="12">表示できるデータがありません</td></tr>';document.getElementById('status').textContent=`${view.length}行表示 / 全${rows.length}行`}
-document.getElementById('subhead').innerHTML=specs.map(()=>'<th>変動率 (出来高)</th><th title="判定" aria-label="判定"></th>').join('');
+document.getElementById('subhead').innerHTML=specs.map(()=>'<th>変動率 (出来高)</th><th title="判定">判定</th>').join('');
 fetch('./data.json?t='+Date.now(),{cache:'no-store'}).then(res=>{if(!res.ok)throw Error('HTTP '+res.status);return res.json()}).then(data=>{rows=(data.rows||[]).filter(r=>typeof r.date==='string').sort((a,b)=>b.date.localeCompare(a.date));tseByDate=new Map((data.tse_rows||[]).filter(r=>r&&r.date).map(r=>[r.date,r]));renderSummary();display(25,document.querySelector('.controls button'));document.getElementById('status').textContent+=data.updated_at?' / 最終更新 '+new Date(data.updated_at).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'}):''}).catch(e=>{document.getElementById('body').innerHTML='<tr><td colspan="12">データ読み込みに失敗しました</td></tr>';document.getElementById('status').textContent=String(e)});
 </script></body></html>
