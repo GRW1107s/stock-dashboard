@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths:
       - 'index.html'
+      - 'sectors.html'
+      - 'scripts/update_sectors.py'
       - 'scripts/update_data.py'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
@@ -29,10 +31,12 @@ jobs:
         env:
           ALLOW_TSE_THIRD_PARTY_DATA: ${{ vars.ALLOW_TSE_THIRD_PARTY_DATA }}
         run: python scripts/update_data.py
+      - name: Fetch 11 sector ETFs
+        run: python scripts/update_sectors.py
       - name: Stage Pages site
         run: |
           mkdir -p site
-          cp index.html data.json site/
+          cp index.html data.json sectors.html sectors.json site/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
