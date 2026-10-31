@@ -36,6 +36,11 @@
 .history .block,.history .history-date{min-width:0;max-width:100%;width:100%;overflow:hidden;box-sizing:border-box}
 .history .block .ftd{font-size:8px;padding:0;background:transparent;color:inherit;line-height:1}
 .history .block .dd-dot{max-width:100%}
+
+/* Explicit DD calendar state: the WHOLE tile is red, not only a red number circle. */
+.history .blocks .block.dd-highlight,
+.history .blocks .block.sell.dd-highlight{background:#ef4444!important;color:#fff!important}
+.history .blocks .block.dd-highlight .dd-cell-number{display:inline-block;background:transparent!important;color:#fff!important;border:0;border-radius:0;font-weight:700;font-size:11px;line-height:1}
 </style></head><body><main><nav class="page-tabs" aria-label="ページ切り替え"><a href="./index.html" aria-current="page">市場概況</a><a href="./sectors.html">米国セクター概況</a><a href="./jp-sectors.html">日本セクター概況</a></nav>
 <h1>米国・日本市場 日次観測</h1><p class="sub">前営業日比の変動率・出来高増減率・判定｜米国2指数・東証3市場</p>
 <div class="guide"><span class="dot buy">✓</span> 買い集め：上昇＋出来高増加　 <span class="dot sell">×</span> 売り抜け：−0.20%以下＋出来高増加　 <span class="ftd">FTD</span> 反発試行4日目以降に+1.25%以上＋出来高増加<br><span class="muted">赤い丸数字は、その日時点の有効な売り抜け日（DD）件数です。番号のない×はDD集計に必要な履歴が不足する日の表示です。<br>DD失効条件：①DD発生日から25取引日が経過したとき ②そのDD発生日の終値に対して現在の終値が5%以上上昇したとき。いずれかで有効DD件数から除外します。<br>※ IBD公式判定の完全再現ではなく、Stalling Dayは含みません。</span></div>
@@ -65,7 +70,7 @@ function badge(v){
 function historyMark(v){
   if(!v)return '';
   if(v.judge==='ftd')return '<span class="ftd">FTD</span>';
-  if(v.dd_number)return '<span class="dd-num">'+v.dd_number+'</span>';
+  if(v.dd_number)return '<span class="dd-cell-number">'+v.dd_number+'</span>';
   return '';
 }
 
@@ -93,7 +98,7 @@ function renderSummary(){
       const date=r?(key==='sp500'||key==='nasdaq'?r.date:r.japan_date):null;
       const title=`${date||'未確定'} / 変動率 ${fmt(v?.change)} / 出来高 ${fmt(v?.volume)} / DD ${v?.dd_count??'—'}件`;
       const kind=v?.judge==='ftd'?'ftd':v?.dd_number?'sell':v?.judge==='buy'?'buy':v?.judge==='sell'?'sell':'';
-      return `<span class="block ${kind} ${v?.dd_number?'dd-numbered':''}" title="${title}">${historyMark(v)}</span>`;
+      return `<span class="block ${kind} ${v?.dd_number?'dd-numbered dd-highlight':''}" title="${title}">${historyMark(v)}</span>`;
     }).join('');
     return `<div class="history-row"><strong>${name}</strong><div class="blocks">${cells}</div></div>`;
   };
