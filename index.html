@@ -17,9 +17,16 @@
 .market-table #subhead th:nth-child(even),.market-table tbody td:nth-child(3),.market-table tbody td:nth-child(5),.market-table tbody td:nth-child(8),.market-table tbody td:nth-child(10),.market-table tbody td:nth-child(12){width:36px;text-align:center}
 .history{width:100%;max-width:none;margin:0 0 10px}
 .history .history-matrix{min-width:780px;width:100%}
+
+.signal-cell{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1.1}
+.signal-dd,.signal-ra{max-width:100%;border-radius:2px;padding:1px 2px;font-weight:700;font-size:9px;white-space:nowrap}
+.signal-dd{background:#fee2e2;color:#b91c1c}.signal-ra{background:#dbeafe;color:#1d4ed8}
+.history .block{height:19px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:8px;line-height:9px;font-weight:700;white-space:nowrap}
+.history .block.buy,.history .block.sell,.history .block.ftd{color:#fff}
+.history .block.ra-block{background:#bfdbfe;color:#1e40af}
 </style></head><body><main><nav class="page-tabs" aria-label="ページ切り替え"><a href="./index.html" aria-current="page">市場概況</a><a href="./sectors.html">米国セクター概況</a><a href="./jp-sectors.html">日本セクター概況</a></nav>
 <h1>米国・日本市場 日次観測</h1><p class="sub">前営業日比の変動率・出来高増減率・判定｜米国2指数・東証3市場</p>
-<div class="guide"><span class="dot buy">✓</span> 買い集め：上昇＋出来高増加　 <span class="dot sell">×</span> 売り抜け：−0.20%以下＋出来高増加　 <span class="ftd">FTD</span> 反発試行4日目以降に+1.25%以上＋出来高増加<br><span class="muted">FTDは独自の簡易判定。指数の出来高が欠ける場合は判定しません。東証P/S/Gの出来高は各市場の売買高です。</span></div>
+<div class="guide"><span class="dot buy">✓</span> 買い集め：上昇＋出来高増加　 <span class="dot sell">×</span> 売り抜け：−0.20%以下＋出来高増加　 <span class="ftd">FTD</span> 反発試行4日目以降に+1.25%以上＋出来高増加<br><span class="muted">RA1〜は反発試行日数、DD1〜はその日時点の有効な売り抜け日件数（過去25取引日、DD終値から5%以上上昇で失効）です。IBD公式判定ではない簡易版で、Stalling Dayは未算入。日本3市場は安値データ不足のためRAを非表示、DDも算出可能な場合にのみ番号表示します。</span></div>
 <div class="cards" id="cards"></div>
 <section class="history"><div class="history-title"><strong>直近25取引日の判定履歴</strong><span class="muted">左：新しい → 右：古い｜米国 → 次の日本取引日</span></div><div class="history-scroll"><div class="history-matrix" id="histories"></div></div><div class="legend"><span><i class="square buy"></i>買い集め</span><span><i class="square sell"></i>売り抜け</span><span><i class="square ftd"></i>FTD</span><span><i class="square"></i>通常・未判定</span></div></section>
 <div class="controls"><button class="active" onclick="display(25,this)">25取引日</button><button onclick="display(90,this)">90取引日</button><button onclick="display(0,this)">すべて</button></div>
@@ -32,9 +39,10 @@ const hasNum=v=>typeof v==='number'&&Number.isFinite(v);
 function fmt(v){return hasNum(v)?(v>0?'+':'')+v.toFixed(2)+'%':'—'}
 function cls(v){return !hasNum(v)?'na':v>0?'pos':v<0?'neg':''}
 function getRow(r,key){return key==='prime'||key==='standard'||key==='growth'?(tseByDate.get(r.japan_date)||{})[key]||null:r[key]||null}
-function badge(j){if(j==='ftd')return '<span class="ftd">FTD</span>';if(j==='buy')return '<span class="dot buy">✓</span>';if(j==='sell')return '<span class="dot sell">×</span>';return '<span class="na">—</span>'}
+function badge(v){const p=[];if(v?.dd_number)p.push('<span class="signal-dd">DD'+v.dd_number+'</span>');else if(v?.judge==='sell')p.push('<span class="dot sell">×</span>');if(v?.judge==='ftd')p.push('<span class="ftd">FTD</span>');else if(v?.judge==='buy')p.push('<span class="dot buy">✓</span>');if(v?.ra_day)p.push('<span class="signal-ra">RA'+v.ra_day+'</span>');if(!p.length)p.push('<span class="na">—</span>');return '<span class="signal-cell">'+p.join('')+'</span>'}
+function historyMark(v){if(!v)return '';const p=[];if(v.judge==='ftd')p.push('FTD');else if(v.dd_number)p.push('DD'+v.dd_number);if(v.ra_day)p.push('RA'+v.ra_day);return p.map(x=>'<span>'+x+'</span>').join('')}
 function priceCell(obj){if(!obj)return '<span class="na">—</span>';return `<div class="price ${cls(obj.change)}">${fmt(obj.change)}</div><div class="vol">(${fmt(obj.volume)})</div>`}
-function rowHtml(r){return `<tr><td class="day">${(r.date||'—').replaceAll('-','/')}</td>${specs.slice(0,2).map(([k])=>{const v=getRow(r,k);return `<td>${priceCell(v)}</td><td>${badge(v?.judge)}</td>`}).join('')}<td class="day">${(r.japan_date||'—').replaceAll('-','/')}</td>${specs.slice(2).map(([k])=>{const v=getRow(r,k);return `<td>${priceCell(v)}</td><td>${badge(v?.judge)}</td>`}).join('')}</tr>`}
+function rowHtml(r){return `<tr><td class="day">${(r.date||'—').replaceAll('-','/')}</td>${specs.slice(0,2).map(([k])=>{const v=getRow(r,k);return `<td>${priceCell(v)}</td><td>${badge(v)}</td>`}).join('')}<td class="day">${(r.japan_date||'—').replaceAll('-','/')}</td>${specs.slice(2).map(([k])=>{const v=getRow(r,k);return `<td>${priceCell(v)}</td><td>${badge(v)}</td>`}).join('')}</tr>`}
 function historyDate(value){return value ? value.slice(5).replace('-', '/') : '—'}
 function historyLine(label, values, extra=''){
   return `<div class="history-row ${extra}"><strong class="history-date-label">${label}</strong><div class="blocks">${values.map(value=>`<span class="history-date" title="${value||'未確定'}">${historyDate(value)}</span>`).join('')}</div></div>`;
@@ -55,9 +63,9 @@ function renderSummary(){
     const cells=aligned.map(r=>{
       const v=r?getRow(r,key):null;
       const date=r?(key==='sp500'||key==='nasdaq'?r.date:r.japan_date):null;
-      const title=`${date||'未確定'} / 変動率 ${fmt(v?.change)} / 出来高 ${fmt(v?.volume)}`;
+      const title=`${date||'未確定'} / 変動率 ${fmt(v?.change)} / 出来高 ${fmt(v?.volume)} / DD ${v?.dd_count??'—'}件 / RA ${v?.ra_day??'—'}日目`;
       const kind=v?.judge==='buy'||v?.judge==='sell'||v?.judge==='ftd'?v.judge:'';
-      return `<span class="block ${kind}" title="${title}"></span>`;
+      return `<span class="block ${kind} ${v?.ra_day&&!kind?'ra-block':''}" title="${title}">${historyMark(v)}</span>`;
     }).join('');
     return `<div class="history-row"><strong>${name}</strong><div class="blocks">${cells}</div></div>`;
   };
