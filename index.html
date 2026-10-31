@@ -27,6 +27,15 @@
 .history .block.buy,.history .block.sell,.history .block.ftd{color:white}
 .history .block.sell.dd-numbered{background:transparent}
 .history .block.dd-numbered .dd-dot{width:15px;min-width:15px;height:15px;flex-basis:15px;font-size:9px}
+
+/* Keep all 25 date cells and signal cells on the same responsive grid. */
+.history-scroll{width:100%;overflow-x:auto}
+.history-matrix{width:100%}
+.history-row{width:100%;min-width:0}
+.history-row>.blocks{min-width:0;width:100%;display:grid;grid-template-columns:repeat(25,minmax(0,1fr));gap:2px}
+.history .block,.history .history-date{min-width:0;max-width:100%;width:100%;overflow:hidden;box-sizing:border-box}
+.history .block .ftd{font-size:8px;padding:0;background:transparent;color:inherit;line-height:1}
+.history .block .dd-dot{max-width:100%}
 </style></head><body><main><nav class="page-tabs" aria-label="ページ切り替え"><a href="./index.html" aria-current="page">市場概況</a><a href="./sectors.html">米国セクター概況</a><a href="./jp-sectors.html">日本セクター概況</a></nav>
 <h1>米国・日本市場 日次観測</h1><p class="sub">前営業日比の変動率・出来高増減率・判定｜米国2指数・東証3市場</p>
 <div class="guide"><span class="dot buy">✓</span> 買い集め：上昇＋出来高増加　 <span class="dot sell">×</span> 売り抜け：−0.20%以下＋出来高増加　 <span class="ftd">FTD</span> 反発試行4日目以降に+1.25%以上＋出来高増加<br><span class="muted">赤い丸数字は、その日時点の有効な売り抜け日（DD）件数です。直近25取引日で計算し、DD終値から5%以上の上昇でも失効します。番号のない×はDD集計に必要な履歴が不足する日の表示です。IBD公式判定の完全再現ではなく、Stalling Dayは含みません。</span></div>
@@ -59,7 +68,7 @@ function historyMark(v){
   if(v.dd_number)return ddCircle(v.dd_number);
   return '';
 }
-function historyMark(v){if(!v)return '';const p=[];if(v.judge==='ftd')p.push('FTD');else if(v.dd_number)p.push('DD'+v.dd_number);if(v.ra_day)p.push('RA'+v.ra_day);return p.map(x=>'<span>'+x+'</span>').join('')}
+
 function priceCell(obj){if(!obj)return '<span class="na">—</span>';return `<div class="price ${cls(obj.change)}">${fmt(obj.change)}</div><div class="vol">(${fmt(obj.volume)})</div>`}
 function rowHtml(r){return `<tr><td class="day">${(r.date||'—').replaceAll('-','/')}</td>${specs.slice(0,2).map(([k])=>{const v=getRow(r,k);return `<td>${priceCell(v)}</td><td>${badge(v)}</td>`}).join('')}<td class="day">${(r.japan_date||'—').replaceAll('-','/')}</td>${specs.slice(2).map(([k])=>{const v=getRow(r,k);return `<td>${priceCell(v)}</td><td>${badge(v)}</td>`}).join('')}</tr>`}
 function historyDate(value){return value ? value.slice(5).replace('-', '/') : '—'}
