@@ -23,7 +23,7 @@
 .rank-return{text-align:right;font-weight:700}.rank-spy{text-align:right;font-size:9px;color:#64748b;white-space:nowrap}
 .rank-shift{font-size:10px;font-weight:700;flex:none}.rank-shift.up{color:#15803d}.rank-shift.down{color:#dc2626}.rank-shift.level{color:#64748b}
 .rank-bridge{padding-top:8px;min-width:0}.rank-link-head{height:70px;text-align:center;font-size:9px;color:#64748b;line-height:1.7;padding-top:14px}
-.rank-link-svg{display:block;width:100%;height:352px}
+.rank-link-svg{display:block;width:100%;height:544px;overflow:visible}
 @media(max-width:1190px){.period-rankings{grid-template-columns:1fr;gap:10px}.rank-bridge{display:none}.rank-entry{grid-template-columns:22px minmax(100px,1fr) 70px 85px;gap:5px;font-size:11px}.rank-spy{font-size:10px}}
 
 /* Both history and daily table expand with the available viewport width. */
@@ -67,37 +67,79 @@ function renderRankings() {
         ? `<span class="rank-shift ${state}" title="${previousPeriod}日順位との差">${indicator}</span>`
         : '';
       const vsTopix = v.diff === null ? '—' : 'TOPIX比 ' + (v.diff > 0 ? '+' : '') + v.diff.toFixed(2) + 'pp';
-      return `<div class="rank-entry"><span class="rank-position">${i + 1}</span><span class="rank-name" title="${v.name}（${v.key}）"><span class="rank-name-text">${v.name}（${v.key}）</span>${shift}</span><span class="rank-return ${cls(v.ret)}">${fmt(v.ret)}</span><span class="rank-spy">${vsTopix}</span></div>`;
+      return `<div class="rank-entry" data-sector="${v.key}"><span class="rank-position">${i + 1}</span><span class="rank-name" title="${v.name}（${v.key}）"><span class="rank-name-text">${v.name}（${v.key}）</span>${shift}</span><span class="rank-return ${cls(v.ret)}">${fmt(v.ret)}</span><span class="rank-spy">${vsTopix}</span></div>`;
     }).join('') : '<p class="muted">期間内のデータが不足しています</p>';
-    return `<section class="rank-panel"><div class="rank-header"><h2>直近${period}取引日 強さランキング</h2><p class="rank-note">ETF累積騰落率順｜TOPIX比は同期間との差</p></div>${entries}</section>`;
+    return `<section class="rank-panel" data-period="${period}"><div class="rank-header"><h2>直近${period}取引日 強さランキング</h2><p class="rank-note">ETF累積騰落率順｜TOPIX比は同期間との差</p></div>${entries}</section>`;
   }
 
-  function bridge(oldPeriod, newPeriod, oldRanks, newRanks) {
-    const rankNext = new Map(newRanks.map((v, i) => [v.key, i + 1]));
-    const markerId = 'rank-arrow-' + oldPeriod + '-' + newPeriod;
-    const markers = [['up', '#15803d'], ['down', '#dc2626'], ['level', '#94a3b8']].map(([state, color]) =>
-      `<marker id="${markerId}-${state}" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0 L5 3 L0 6 Z" fill="${color}"/></marker>`
-    ).join('');
-    const paths = oldRanks.map((v, i) => {
-      const dest = rankNext.get(v.key);
-      if (dest === undefined) return '';
-      const change = i + 1 - dest;
-      const state = change > 0 ? 'up' : change < 0 ? 'down' : 'level';
-      const color = change > 0 ? '#15803d' : change < 0 ? '#dc2626' : '#94a3b8';
-      const y1 = i * 32 + 16;
-      const y2 = (dest - 1) * 32 + 16;
-      return `<path d="M64 ${y1} C45 ${y1},21 ${y2},4 ${y2}" fill="none" stroke="${color}" stroke-width="1.4" opacity=".75" marker-end="url(#${markerId}-${state})"><title>${v.name}：${oldPeriod}日${i + 1}位 → ${newPeriod}日${dest}位</title></path>`;
-    }).join('');
-    return `<div class="rank-bridge" aria-label="${oldPeriod}日から${newPeriod}日の順位変化"><div class="rank-link-head">${newPeriod}日 ← ${oldPeriod}日<br>緑：順位上昇／赤：下降</div><svg class="rank-link-svg" role="img" aria-label="セクター順位の移動" viewBox="0 0 66 352" preserveAspectRatio="none"><defs>${markers}</defs>${paths}</svg></div>`;
+  function bridge(oldPeriod, newPeriod) {
+    // SVG paths are positioned after layout, using actual row coordinates.
+    return `<div class="rank-bridge" data-from="${oldPeriod}" data-to="${newPeriod}" aria-label="${oldPeriod}日から${newPeriod}日の順位変化"><div class="rank-link-head">${newPeriod}日 ← ${oldPeriod}日<br>緑：順位上昇／赤：下降</div><svg class="rank-link-svg" role="img" aria-label="セクター順位の移動"></svg></div>`;
   }
 
   // Display 3, 10, 25 left to right. Arrows point right-to-left (long-term to short-term).
   target.innerHTML = panel(3, rank3, rank10, 10) +
-    bridge(10, 3, rank10, rank3) +
+    bridge(10, 3) +
     panel(10, rank10, rank25, 25) +
-    bridge(25, 10, rank25, rank10) +
+    bridge(25, 10) +
     panel(25, rank25, null, null);
+  requestAnimationFrame(drawRankingArrows);
 }
+
+function drawRankingArrows() {
+  const root = document.getElementById('period-rankings');
+  if (!root) return;
+  for (const bridge of root.querySelectorAll('.rank-bridge')) {
+    const svg = bridge.querySelector('svg.rank-link-svg');
+    if (!svg || getComputedStyle(bridge).display === 'none') continue;
+    const from = bridge.dataset.from;
+    const to = bridge.dataset.to;
+    const oldPanel = root.querySelector(`.rank-panel[data-period="${from}"]`);
+    const newPanel = root.querySelector(`.rank-panel[data-period="${to}"]`);
+    if (!oldPanel || !newPanel) continue;
+    const oldRows = Array.from(oldPanel.querySelectorAll('.rank-entry[data-sector]'));
+    const newRows = Array.from(newPanel.querySelectorAll('.rank-entry[data-sector]'));
+    if (!oldRows.length || !newRows.length) { svg.innerHTML = ''; continue; }
+
+    // Set the SVG height to the *actual* 17-row area; the old 352px viewBox
+    // covered only 11 rows and compressed/clipped the Japanese sector links.
+    const bottom = Math.max(
+      oldRows[oldRows.length - 1].getBoundingClientRect().bottom,
+      newRows[newRows.length - 1].getBoundingClientRect().bottom
+    );
+    const top = svg.getBoundingClientRect().top;
+    const height = Math.max(1, Math.ceil(bottom - top) + 2);
+    svg.style.height = height + 'px';
+    const rect = svg.getBoundingClientRect();
+    const width = rect.width;
+    if (width < 8) continue;
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    svg.setAttribute('preserveAspectRatio', 'none');
+
+    const nextRanks = new Map(newRows.map((row, i) => [row.dataset.sector, {row, rank:i+1}]));
+    const markerPrefix = 'jp-sector-arrow-' + from + '-' + to;
+    const colors = {up:'#15803d', down:'#dc2626', flat:'#94a3b8'};
+    const defs = Object.entries(colors).map(([state,color]) =>
+      `<marker id="${markerPrefix}-${state}" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0 L5 3 L0 6 Z" fill="${color}"/></marker>`
+    ).join('');
+    const paths = oldRows.map((row, i) => {
+      const match = nextRanks.get(row.dataset.sector);
+      if (!match) return '';
+      const before = i + 1;
+      const after = match.rank;
+      const state = after < before ? 'up' : after > before ? 'down' : 'flat';
+      const y1 = row.getBoundingClientRect().top + row.getBoundingClientRect().height/2 - rect.top;
+      const r2 = match.row.getBoundingClientRect();
+      const y2 = r2.top + r2.height/2 - rect.top;
+      const x1 = width - 3;
+      const x2 = 4;
+      const label = row.dataset.sector + ': ' + from + '日' + before + '位 → ' + to + '日' + after + '位';
+      return `<path d="M${x1} ${y1} C${width*.68} ${y1},${width*.32} ${y2},${x2} ${y2}" fill="none" stroke="${colors[state]}" stroke-width="1.5" opacity=".72" marker-end="url(#${markerPrefix}-${state})"><title>${label}</title></path>`;
+    }).join('');
+    svg.innerHTML = '<defs>' + defs + '</defs>' + paths;
+  }
+}
+window.addEventListener('resize', () => requestAnimationFrame(drawRankingArrows));
 function renderSummary(){document.getElementById('cards').innerHTML=keys().map(k=>{const latest=rows[0]?.sectors?.[k];const recent=rows.slice(0,25).map(r=>r.sectors?.[k]).filter(Boolean);const sell=recent.filter(x=>x.judge==='sell').length;const ftd=recent.filter(x=>x.judge==='ftd').length;const vs=latest?.vs_topix;return `<div class="card"><b>${names[k]}（${k}）</b><div class="tiny">最新 ${fmt(latest?.change)} ｜ TOPIX比 <span class="${cls(vs)}">${hasNum(vs)?(vs>0?'+':'')+vs.toFixed(2)+'pp':'—'}</span></div><div class="counts">× ${sell}日　<span style="color:#15803d">FTD ${ftd}</span></div><div class="tiny">当日相対順位 ${latest?.rank||'—'}/${keys().length}</div></div>`}).join('');const selected=rows.slice(0,25);const aligned=selected.concat(Array.from({length:25-selected.length},()=>null));const dates=aligned.map(r=>`<span class="history-date">${r?r.date.slice(5).replace('-','/'):'—'}</span>`).join('');const head=`<div class="history-row"><strong class="history-date-label">日本日付</strong><div class="blocks">${dates}</div></div>`;const lines=keys().map(k=>{const squares=aligned.map(r=>{const v=r?.sectors?.[k];const kind=['buy','sell','ftd'].includes(v?.judge)?v.judge:'';const title=`${r?.date||'—'} ${k} 変動率${fmt(v?.change)} 出来高${fmt(v?.volume)} TOPIX比${hasNum(v?.vs_topix)?v.vs_topix.toFixed(2)+'pp':'—'}`;return `<span class="block ${kind}" title="${title}"></span>`}).join('');return `<div class="history-row"><strong>${names[k]}（${k}）</strong><div class="blocks">${squares}</div></div>`}).join('');document.getElementById('histories').innerHTML=head+lines}
 function priceCell(v){if(!v)return '<span class="na">—</span>';return `<div class="price ${cls(v.change)}">${fmt(v.change)}</div><div class="vol">(${fmt(v.volume)})</div>`}
 function rowHtml(r){return `<tr><td class="date">${r.date.replaceAll('-','/')}</td>${keys().map(k=>{const v=r.sectors?.[k];return `<td>${priceCell(v)}</td><td>${badge(v?.judge)}</td>`}).join('')}</tr>`}
