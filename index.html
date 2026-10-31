@@ -24,6 +24,12 @@
 .history .block{height:19px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:8px;line-height:9px;font-weight:700;white-space:nowrap}
 .history .block.buy,.history .block.sell,.history .block.ftd{color:#fff}
 .history .block.ra-block{background:#bfdbfe;color:#1e40af}
+
+/* Latest summary: DD, RA, FTD only. Keep RA consistently yellow. */
+.card .counts{display:flex;justify-content:center;align-items:center;gap:12px;flex-wrap:wrap;color:inherit}
+.dd-count{color:#dc2626;font-weight:700}.ra-count{color:#ca8a04;font-weight:700}.ftd-count{color:#15803d;font-weight:700}
+.signal-ra{background:#fef3c7;color:#a16207}
+.history .block.ra-block{background:#fde68a;color:#92400e}
 </style></head><body><main><nav class="page-tabs" aria-label="ページ切り替え"><a href="./index.html" aria-current="page">市場概況</a><a href="./sectors.html">米国セクター概況</a><a href="./jp-sectors.html">日本セクター概況</a></nav>
 <h1>米国・日本市場 日次観測</h1><p class="sub">前営業日比の変動率・出来高増減率・判定｜米国2指数・東証3市場</p>
 <div class="guide"><span class="dot buy">✓</span> 買い集め：上昇＋出来高増加　 <span class="dot sell">×</span> 売り抜け：−0.20%以下＋出来高増加　 <span class="ftd">FTD</span> 反発試行4日目以降に+1.25%以上＋出来高増加<br><span class="muted">RA1〜は反発試行日数、DD1〜はその日時点の有効な売り抜け日件数（過去25取引日、DD終値から5%以上上昇で失効）です。IBD公式判定ではない簡易版で、Stalling Dayは未算入。日本3市場は安値データ不足のためRAを非表示、DDも算出可能な場合にのみ番号表示します。</span></div>
@@ -50,10 +56,10 @@ function historyLine(label, values, extra=''){
 function renderSummary(){
   document.getElementById('cards').innerHTML=specs.map(([key,name])=>{
     const days=rows.map(r=>getRow(r,key)).filter(Boolean).slice(0,25);
-    const sells=days.filter(x=>x.judge==='sell').length;
     const ftds=days.filter(x=>x.judge==='ftd').length;
     const valid=days.some(x=>hasNum(x.change)&&hasNum(x.volume));
-    const latest=days[0];return `<div class="card"><b>${name}</b><div class="counts">DD ${latest?.dd_count??'—'}　<span style="color:#1d4ed8">RA ${latest?.ra_day??'—'}</span></div><div class="muted">× ${valid?sells+'日':'—'}　FTD ${valid?ftds:'—'}</div></div>`;
+    const latest=days[0];
+    return `<div class="card"><b>${name}</b><div class="counts"><span class="dd-count">DD ${latest?.dd_count??'—'}</span><span class="ra-count">RA ${latest?.ra_day??'—'}</span><span class="ftd-count">FTD ${valid?ftds:'—'}</span></div></div>`;
   }).join('');
   // All five series share the same 25 US-session columns; never filter away missing Japanese rows.
   const selected=rows.slice(0,25);
