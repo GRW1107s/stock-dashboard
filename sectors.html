@@ -41,6 +41,15 @@
 .history .block.buy,.history .block.sell,.history .block.ftd{color:white}
 .history .block.sell.dd-numbered{background:transparent}
 .history .block.dd-numbered .dd-dot{width:15px;min-width:15px;height:15px;flex-basis:15px;font-size:9px}
+
+/* Keep all 25 date cells and signal cells on the same responsive grid. */
+.history-scroll{width:100%;overflow-x:auto}
+.history-matrix{width:100%}
+.history-row{width:100%;min-width:0}
+.history-row>.blocks{min-width:0;width:100%;display:grid;grid-template-columns:repeat(25,minmax(0,1fr));gap:2px}
+.history .block,.history .history-date{min-width:0;max-width:100%;width:100%;overflow:hidden;box-sizing:border-box}
+.history .block .ftd{font-size:8px;padding:0;background:transparent;color:inherit;line-height:1}
+.history .block .dd-dot{max-width:100%}
 </style></head><body><main><nav class="page-tabs" aria-label="ページ切り替え"><a href="./index.html">市場概況</a><a href="./sectors.html" aria-current="page">米国セクター概況</a><a href="./jp-sectors.html">日本セクター概況</a></nav>
 <h1>S&P500 11セクター 日次観測</h1><p class="sub">11セクターETFの騰落率・出来高増減率・判定</p>
 <div class="guide"><span class="dot buy">✓</span> 買い集め：上昇＋出来高増加　 <span class="dot sell">×</span> 売り抜け：−0.20%以下＋出来高増加　 <span class="ftd">FTD</span> 反発試行4日目以降に+1.25%以上＋出来高増加<br><span class="muted">「強さ」はETFの当日騰落率−SPYの当日騰落率（％ポイント）。判定はETFの出来高を使用した独自の簡易指標で、セクター全銘柄への資金流入を直接測定するものではありません。</span></div>
@@ -69,7 +78,7 @@ function historyMark(v){
   if(v.dd_number)return ddCircle(v.dd_number);
   return '';
 }
-function historyMark(v){if(!v)return '';const p=[];if(v.judge==='ftd')p.push('FTD');else if(v.dd_number)p.push('DD'+v.dd_number);if(v.ra_day)p.push('RA'+v.ra_day);return p.map(x=>'<span>'+x+'</span>').join('')}
+
 function compoundedReturns(changes){if(changes.length===0||changes.some(v=>!hasNum(v)||v<=-100))return null;return (changes.reduce((product,v)=>product*(1+v/100),1)-1)*100}
 function buildPeriodRanks(period) {
   const recent = rows.slice(0, period);
