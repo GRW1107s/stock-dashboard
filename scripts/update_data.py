@@ -91,28 +91,51 @@ def enrich(raw):
 
 
 def load_tse_market_volume():
-    """Load explicitly verified JPX market-segment share volume, in units of 10,000 shares.
-    A separate source-validation process is needed for automatic downloads.
+    """Merge historical local CSV with an OPTIONAL licensed/public CSV feed.
+
+    Required columns: date,prime,standard,growth (share counts, same units).
+    Absence of a permitted feed does NOT imply live automatic collection.
     """
     path = ROOT / 'data' / 'tse_market_volume.csv'
-    if not path.exists():
-        print('WARNING: TSE volume CSV missing; panel will be empty')
-        return []
-    rows = []
-    with path.open(encoding='utf-8-sig', newline='') as f:
-        for raw in csv.DictReader(f):
-            day = raw['date']
+    records = {}
+    def read_csv(contents, source):
+        rdr = csv.DictReader(io.StringIO(contents))
+        required = {'date', 'prime', 'standard', 'growth'}
+        if not required.issubset(set(rdr.fieldnames or [])):
+            raise ValueError(f'{source}: missing required CSV columns')
+        for row in rdr:
+            day = row['date'].strip().replace('/', '-')
             dt.date.fromisoformat(day)
             item = {'date': day}
             for key in ('prime', 'standard', 'growth'):
-                val = raw.get(key, '').strip()
-                item[key] = int(val) if val else None
-                pctval = raw.get(key + '_pct', '').strip()
-                item[key + '_pct'] = float(pctval) if pctval else None
-            rows.append(item)
-    return sorted(rows, key=lambda x: x['date'], reverse=True)
-
-
+                val = row.get(key, '').strip().replace(',', '')
+                item[key] = valid_number(val) if val else None
+            records[day] = item
+    if path.exists():
+        read_csv(path.read_text(encoding='utf-8-sig'), 'local CSV')
+    feed = os.getenv('TSE_MARKET_VOLUME_CSV_URL', '').strip()
+    if feed:
+        if not feed.startswith('https://'):
+            raise ValueError('TSE_MARKET_VOLUME_CSV_URL must use https')
+        try:
+            req = urllib.request.Request(feed, headers={'User-Agent':'MarketDashboard/1.0'})
+            with urllib.request.urlopen(req, timeout=20) as res:
+                payload = res.read(5_000_001)
+            if len(payload) > 5_000_000:
+                raise ValueError('CSV exceeds 5MB')
+            read_csv(payload.decode('utf-8-sig'), 'authorized CSV feed')
+        except Exception as exc:
+            print(f'WARNING: optional TSE volume feed failed: {exc}')
+    ordered = sorted(records)
+    for i, day in enumerate(ordered):
+        item = records[day]
+        prev = records[ordered[i - 1]] if i else {}
+        for key in ('prime', 'standard', 'growth'):
+            v, pv = item[key], prev.get(key)
+            item[key + '_pct'] = round((v / pv - 1) * 100, 6) if v is not None and pv is not None and pv > 0 else None
+    if not feed:
+        print('INFO: no automatic TSE volume feed configured; local verified CSV only')
+    return [records[k] for k in reversed(ordered)]
 
 
 def load_tse_market_indices(market_volume):
@@ -202,7 +225,7 @@ def main():
         except (ValueError, OSError, TypeError, KeyError):
             pass
     tse_rows.sort(key=lambda r: r['date'], reverse=True)
-    result = {'updated_at': dt.datetime.now(dt.timezone.utc).isoformat(timespec='seconds'), 'source': 'Yahoo Finance (US indices); verified TSE market-volume CSV', 'rows': rows, 'tse_market_volume': market_volume, 'tse_rows': tse_rows}
+    result = {'updated_at': dt.datetime.now(dt.timezone.utc).isoformat(timespec='seconds'), 'source': 'Yahoo Finance (US); locally provided / authorized TSE CSV (Japan)', 'rows': rows, 'tse_market_volume': market_volume, 'tse_rows': tse_rows}
     (ROOT / 'data.json').write_text(json.dumps(result, ensure_ascii=False), encoding='utf-8')
     print(f'Saved {len(rows)} rows; TSE market days: {len(tse_rows)}')
 
