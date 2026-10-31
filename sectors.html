@@ -11,8 +11,10 @@
 .sector-table td{font-size:10px}.sector-table .vol{font-size:9px}
 .sector-table .dot{width:16px;height:16px;font-size:11px}
 .sector-table .ftd{font-size:8px;padding:1px 2px}
+/* Keep original striped rows and marker colors; no judgment-cell fill. */
+.sector-table tbody td:nth-child(2n+3){background-color:transparent;box-shadow:none}
 
-.period-rankings{display:grid;grid-template-columns:minmax(0,1fr) 66px minmax(0,1fr) 66px minmax(0,1fr);gap:0;margin:10px 0 12px}
+.period-rankings-title{font-size:14px;margin:12px 0 6px}.period-rankings{display:grid;grid-template-columns:minmax(0,1fr) 66px minmax(0,1fr) 66px minmax(0,1fr);gap:0;margin:10px 0 12px}
 .rank-panel{background:#fff;border:1px solid #e1e7ef;border-radius:8px;padding:8px;min-width:0}
 .rank-header{height:70px}.rank-panel h2{font-size:12px;margin:0 0 6px}.rank-note{font-size:10px;color:#64748b;margin:0;line-height:1.5}
 .rank-entry{display:grid;grid-template-columns:20px minmax(78px,1fr) 62px 77px;align-items:center;gap:3px;height:32px;border-top:1px solid #edf1f5;padding:0 1px;font-variant-numeric:tabular-nums;font-size:10px}
@@ -30,7 +32,7 @@
 </style></head><body><main><nav class="page-tabs" aria-label="ページ切り替え"><a href="./index.html">市場概況</a><a href="./sectors.html" aria-current="page">米国セクター概況</a></nav>
 <h1>S&P500 11セクター 日次観測</h1><p class="sub">11セクターETFの騰落率・出来高増減率・判定</p>
 <div class="guide"><span class="dot buy">✓</span> 買い集め：上昇＋出来高増加　 <span class="dot sell">×</span> 売り抜け：−0.20%以下＋出来高増加　 <span class="ftd">FTD</span> 反発試行4日目以降に+1.25%以上＋出来高増加<br><span class="muted">「強さ」はETFの当日騰落率−SPYの当日騰落率（％ポイント）。判定はETFの出来高を使用した独自の簡易指標で、セクター全銘柄への資金流入を直接測定するものではありません。</span></div>
-<section class="period-rankings" id="period-rankings" aria-label="期間別セクター強さランキング"></section>
+<h2 class="period-rankings-title">セクター強さランキング（3・10・25取引日）</h2><section class="period-rankings" id="period-rankings" aria-label="3・10・25取引日のセクター強さランキング"></section>
 <div class="cards" id="cards"></div>
 <section class="history"><div class="history-title"><strong>直近25取引日の判定履歴</strong><span class="muted">左：新しい → 右：古い</span></div><div class="history-scroll"><div class="history-matrix" id="histories"></div></div><div class="legend"><span><i class="square buy"></i>買い集め</span><span><i class="square sell"></i>売り抜け</span><span><i class="square ftd"></i>FTD</span><span><i class="square"></i>通常・未判定</span></div></section>
 <div class="controls"><button class="active" onclick="display(25,this)">25取引日</button><button onclick="display(90,this)">90取引日</button><button onclick="display(0,this)">すべて</button></div>
@@ -84,17 +86,17 @@ function renderRankings() {
       const color = change > 0 ? '#15803d' : change < 0 ? '#dc2626' : '#94a3b8';
       const y1 = i * 32 + 16;
       const y2 = (dest - 1) * 32 + 16;
-      return `<path d="M2 ${y1} C19 ${y1},43 ${y2},62 ${y2}" fill="none" stroke="${color}" stroke-width="1.4" opacity=".75" marker-end="url(#${markerId}-${state})"><title>${v.name}：${oldPeriod}日${i + 1}位 → ${newPeriod}日${dest}位</title></path>`;
+      return `<path d="M64 ${y1} C45 ${y1},21 ${y2},4 ${y2}" fill="none" stroke="${color}" stroke-width="1.4" opacity=".75" marker-end="url(#${markerId}-${state})"><title>${v.name}：${oldPeriod}日${i + 1}位 → ${newPeriod}日${dest}位</title></path>`;
     }).join('');
-    return `<div class="rank-bridge" aria-label="${oldPeriod}日から${newPeriod}日の順位変化"><div class="rank-link-head">${oldPeriod}日 → ${newPeriod}日<br>緑：上昇／赤：下降</div><svg class="rank-link-svg" role="img" aria-label="セクター順位の移動" viewBox="0 0 66 352" preserveAspectRatio="none"><defs>${markers}</defs>${paths}</svg></div>`;
+    return `<div class="rank-bridge" aria-label="${oldPeriod}日から${newPeriod}日の順位変化"><div class="rank-link-head">${newPeriod}日 ← ${oldPeriod}日<br>緑：順位上昇／赤：下降</div><svg class="rank-link-svg" role="img" aria-label="セクター順位の移動" viewBox="0 0 66 352" preserveAspectRatio="none"><defs>${markers}</defs>${paths}</svg></div>`;
   }
 
-  // Longer period on the left, recent period on the right, keeping arrows chronological.
-  target.innerHTML = panel(25, rank25, null, null) +
-    bridge(25, 10, rank25, rank10) +
-    panel(10, rank10, rank25, 25) +
+  // Display 3, 10, 25 left to right. Arrows point right-to-left (long-term to short-term).
+  target.innerHTML = panel(3, rank3, rank10, 10) +
     bridge(10, 3, rank10, rank3) +
-    panel(3, rank3, rank10, 10);
+    panel(10, rank10, rank25, 25) +
+    bridge(25, 10, rank25, rank10) +
+    panel(25, rank25, null, null);
 }
 function renderSummary(){document.getElementById('cards').innerHTML=keys().map(k=>{const latest=rows[0]?.sectors?.[k];const recent=rows.slice(0,25).map(r=>r.sectors?.[k]).filter(Boolean);const sell=recent.filter(x=>x.judge==='sell').length;const ftd=recent.filter(x=>x.judge==='ftd').length;const vs=latest?.vs_spy;return `<div class="card"><b>${names[k]}（${k}）</b><div class="tiny">最新 ${fmt(latest?.change)} ｜ SPY比 <span class="${cls(vs)}">${hasNum(vs)?(vs>0?'+':'')+vs.toFixed(2)+'pp':'—'}</span></div><div class="counts">× ${sell}日　<span style="color:#15803d">FTD ${ftd}</span></div><div class="tiny">当日相対順位 ${latest?.rank||'—'}/11</div></div>`}).join('');const selected=rows.slice(0,25);const aligned=selected.concat(Array.from({length:25-selected.length},()=>null));const dates=aligned.map(r=>`<span class="history-date">${r?r.date.slice(5).replace('-','/'):'—'}</span>`).join('');const head=`<div class="history-row"><strong class="history-date-label">米国日付</strong><div class="blocks">${dates}</div></div>`;const lines=keys().map(k=>{const squares=aligned.map(r=>{const v=r?.sectors?.[k];const kind=['buy','sell','ftd'].includes(v?.judge)?v.judge:'';const title=`${r?.date||'—'} ${k} 変動率${fmt(v?.change)} 出来高${fmt(v?.volume)} SPY比${hasNum(v?.vs_spy)?v.vs_spy.toFixed(2)+'pp':'—'}`;return `<span class="block ${kind}" title="${title}"></span>`}).join('');return `<div class="history-row"><strong>${names[k]}（${k}）</strong><div class="blocks">${squares}</div></div>`}).join('');document.getElementById('histories').innerHTML=head+lines}
 function priceCell(v){if(!v)return '<span class="na">—</span>';return `<div class="price ${cls(v.change)}">${fmt(v.change)}</div><div class="vol">(${fmt(v.volume)})</div>`}
