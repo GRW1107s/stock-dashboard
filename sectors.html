@@ -11,9 +11,18 @@
 .sector-table td{font-size:10px}.sector-table .vol{font-size:9px}
 .sector-table .dot{width:16px;height:16px;font-size:11px}
 .sector-table .ftd{font-size:8px;padding:1px 2px}
+
+.period-rankings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:10px 0 12px}
+.rank-panel{background:#fff;border:1px solid #e1e7ef;border-radius:8px;padding:10px;min-width:0}
+.rank-panel h2{font-size:13px;margin:0 0 4px}.rank-note{font-size:10px;color:#64748b;margin:0 0 7px}
+.rank-entry{display:grid;grid-template-columns:22px minmax(98px,1fr) 68px 69px;align-items:center;gap:7px;border-top:1px solid #edf1f5;padding:5px 1px;font-variant-numeric:tabular-nums}
+.rank-position{color:#64748b;text-align:center}.rank-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rank-return{text-align:right;font-weight:700}.rank-spy{text-align:right;font-size:10px;color:#64748b}
+@media(max-width:720px){.period-rankings{grid-template-columns:1fr}}
 </style></head><body><main><nav class="page-tabs" aria-label="ページ切り替え"><a href="./index.html">市場概況</a><a href="./sectors.html" aria-current="page">米国セクター概況</a></nav>
 <h1>S&P500 11セクター 日次観測</h1><p class="sub">11セクターETFの騰落率・出来高増減率・判定</p>
 <div class="guide"><span class="dot buy">✓</span> 買い集め：上昇＋出来高増加　 <span class="dot sell">×</span> 売り抜け：−0.20%以下＋出来高増加　 <span class="ftd">FTD</span> 反発試行4日目以降に+1.25%以上＋出来高増加<br><span class="muted">「強さ」はETFの当日騰落率−SPYの当日騰落率（％ポイント）。判定はETFの出来高を使用した独自の簡易指標で、セクター全銘柄への資金流入を直接測定するものではありません。</span></div>
+<section class="period-rankings" id="period-rankings" aria-label="期間別セクター強さランキング"></section>
 <div class="cards" id="cards"></div>
 <section class="history"><div class="history-title"><strong>直近25取引日の判定履歴</strong><span class="muted">左：新しい → 右：古い</span></div><div class="history-scroll"><div class="history-matrix" id="histories"></div></div><div class="legend"><span><i class="square buy"></i>買い集め</span><span><i class="square sell"></i>売り抜け</span><span><i class="square ftd"></i>FTD</span><span><i class="square"></i>通常・未判定</span></div></section>
 <div class="controls"><button class="active" onclick="display(25,this)">25取引日</button><button onclick="display(90,this)">90取引日</button><button onclick="display(0,this)">すべて</button></div>
@@ -21,9 +30,24 @@
 </main><script>
 let rows=[],names={};const hasNum=v=>typeof v==='number'&&Number.isFinite(v);const fmt=v=>hasNum(v)?(v>0?'+':'')+v.toFixed(2)+'%':'—';const cls=v=>!hasNum(v)?'na':v>0?'pos':v<0?'neg':'';const keys=()=>Object.keys(names);
 function badge(j){if(j==='ftd')return '<span class="ftd">FTD</span>';if(j==='buy')return '<span class="dot buy">✓</span>';if(j==='sell')return '<span class="dot sell">×</span>';return '<span class="na">—</span>'}
+function compoundedReturns(changes){if(changes.length===0||changes.some(v=>!hasNum(v)||v<=-100))return null;return (changes.reduce((product,v)=>product*(1+v/100),1)-1)*100}
+function renderRankings(){
+  const target=document.getElementById('period-rankings');
+  target.innerHTML=[5,25].map(period=>{
+    const recent=rows.slice(0,period);
+    const spy=recent.length===period?compoundedReturns(recent.map(r=>r.spy_change)):null;
+    const ranked=keys().map(k=>{
+      const values=recent.map(r=>r.sectors?.[k]?.change);
+      const ret=recent.length===period?compoundedReturns(values):null;
+      return {key:k,name:names[k],ret,diff:ret!==null&&spy!==null?ret-spy:null};
+    }).filter(item=>item.ret!==null).sort((a,b)=>b.ret-a.ret);
+    const items=ranked.length?ranked.map((v,i)=>`<div class="rank-entry"><span class="rank-position">${i+1}</span><span class="rank-name" title="${v.name}（${v.key}）">${v.name}（${v.key}）</span><span class="rank-return ${cls(v.ret)}">${fmt(v.ret)}</span><span class="rank-spy" title="SPYとの差">${v.diff===null?'—':'SPY比 '+(v.diff>0?'+':'')+v.diff.toFixed(2)+'pp'}</span></div>`).join(''):'<p class="muted">期間内のデータが不足しています</p>';
+    return `<section class="rank-panel"><h2>直近${period}取引日 強さランキング</h2><p class="rank-note">ETFの期間累積騰落率順（高い順）｜SPY比は％ポイント差</p>${items}</section>`;
+  }).join('');
+}
 function renderSummary(){document.getElementById('cards').innerHTML=keys().map(k=>{const latest=rows[0]?.sectors?.[k];const recent=rows.slice(0,25).map(r=>r.sectors?.[k]).filter(Boolean);const sell=recent.filter(x=>x.judge==='sell').length;const ftd=recent.filter(x=>x.judge==='ftd').length;const vs=latest?.vs_spy;return `<div class="card"><b>${names[k]}（${k}）</b><div class="tiny">最新 ${fmt(latest?.change)} ｜ SPY比 <span class="${cls(vs)}">${hasNum(vs)?(vs>0?'+':'')+vs.toFixed(2)+'pp':'—'}</span></div><div class="counts">× ${sell}日　<span style="color:#15803d">FTD ${ftd}</span></div><div class="tiny">当日相対順位 ${latest?.rank||'—'}/11</div></div>`}).join('');const selected=rows.slice(0,25);const aligned=selected.concat(Array.from({length:25-selected.length},()=>null));const dates=aligned.map(r=>`<span class="history-date">${r?r.date.slice(5).replace('-','/'):'—'}</span>`).join('');const head=`<div class="history-row"><strong class="history-date-label">米国日付</strong><div class="blocks">${dates}</div></div>`;const lines=keys().map(k=>{const squares=aligned.map(r=>{const v=r?.sectors?.[k];const kind=['buy','sell','ftd'].includes(v?.judge)?v.judge:'';const title=`${r?.date||'—'} ${k} 変動率${fmt(v?.change)} 出来高${fmt(v?.volume)} SPY比${hasNum(v?.vs_spy)?v.vs_spy.toFixed(2)+'pp':'—'}`;return `<span class="block ${kind}" title="${title}"></span>`}).join('');return `<div class="history-row"><strong>${names[k]}（${k}）</strong><div class="blocks">${squares}</div></div>`}).join('');document.getElementById('histories').innerHTML=head+lines}
 function priceCell(v){if(!v)return '<span class="na">—</span>';return `<div class="price ${cls(v.change)}">${fmt(v.change)}</div><div class="vol">(${fmt(v.volume)})</div>`}
 function rowHtml(r){return `<tr><td class="date">${r.date.replaceAll('-','/')}</td>${keys().map(k=>{const v=r.sectors?.[k];return `<td>${priceCell(v)}</td><td>${badge(v?.judge)}</td>`}).join('')}</tr>`}
 let lastUpdated='';function display(n,button){document.querySelectorAll('.controls button').forEach(x=>x.classList.toggle('active',x===button));const view=n?rows.slice(0,n):rows;document.getElementById('body').innerHTML=view.length?view.map(rowHtml).join(''):'<tr><td colspan="23">データがありません</td></tr>';document.getElementById('status').textContent=`${view.length}行表示 / 全${rows.length}行${lastUpdated?' / 最終更新 '+lastUpdated:''}`}
-fetch('./sectors.json?t='+Date.now(),{cache:'no-store'}).then(r=>{if(!r.ok)throw Error('HTTP '+r.status);return r.json()}).then(data=>{names=data.names||{};rows=(data.rows||[]).sort((a,b)=>b.date.localeCompare(a.date));lastUpdated=data.updated_at?new Date(data.updated_at).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'}):'';document.getElementById('headrow').innerHTML='<th rowspan="2" class="date">米国日付</th>'+keys().map(k=>`<th colspan="2">${names[k]}（${k}）</th>`).join('');document.getElementById('subhead').innerHTML=keys().map(()=>'<th title="変動率（出来高前日比）">変動率(量)</th><th title="判定">判定</th>').join('');renderSummary();display(25,document.querySelector('.controls button'))}).catch(e=>{document.getElementById('body').innerHTML='<tr><td colspan="23">データ読み込みに失敗しました</td></tr>';document.getElementById('status').textContent=String(e)});
+fetch('./sectors.json?t='+Date.now(),{cache:'no-store'}).then(r=>{if(!r.ok)throw Error('HTTP '+r.status);return r.json()}).then(data=>{names=data.names||{};rows=(data.rows||[]).sort((a,b)=>b.date.localeCompare(a.date));lastUpdated=data.updated_at?new Date(data.updated_at).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'}):'';document.getElementById('headrow').innerHTML='<th rowspan="2" class="date">米国日付</th>'+keys().map(k=>`<th colspan="2">${names[k]}（${k}）</th>`).join('');document.getElementById('subhead').innerHTML=keys().map(()=>'<th title="変動率（出来高前日比）">変動率(量)</th><th title="判定">判定</th>').join('');renderRankings();renderSummary();display(25,document.querySelector('.controls button'))}).catch(e=>{document.getElementById('body').innerHTML='<tr><td colspan="23">データ読み込みに失敗しました</td></tr>';document.getElementById('status').textContent=String(e)});
 </script></body></html>
