@@ -82,6 +82,7 @@ def enrich_us(prices):
         v, pv = item['volume'], prev['volume'] if prev else None
         vchange = (v / pv - 1) * 100 if v is not None and pv is not None and pv > 0 else None
         judge = classify(change, vchange)
+        ra_day = None
         # Conservative simplified FTD: never substitute close for missing intraday low.
         low = item['low']
         prior = [prices[d]['close'] for d in dates[max(0, i-60):i]]
@@ -93,16 +94,28 @@ def enrich_us(prices):
                     # Day 1 anchor is the LOW of the preceding correction session.
                     base_low = prices[dates[i - 1]]['low'] if i else None
                     state, attempt_days = ('attempt', 1) if base_low is not None else ('correction', 0)
+                    ra_day = 1 if state == 'attempt' else None
             elif state == 'attempt':
                 if low < base_low:
                     state, base_low, attempt_days = 'correction', low, 0
                 else:
                     attempt_days += 1
+                    ra_day = attempt_days
                     if attempt_days >= 4 and change is not None and change >= 1.25 and vchange is not None and vchange > 0:
                         judge, state = 'ftd', 'confirmed'
         series[date] = {'change': round(change, 6) if change is not None else None,
                         'volume': round(vchange, 6) if vchange is not None else None,
-                        'judge': judge}
+                        'judge': judge, 'ra_day': ra_day}
+    active_dd = []
+    for i, date in enumerate(dates):
+        close = prices[date]['close']
+        active_dd = [(idx, price) for idx, price in active_dd
+                     if i-idx < 25 and close < price * 1.05]
+        record = series[date]
+        if record['judge'] == 'sell':
+            active_dd.append((i, close))
+            record['dd_number'] = len(active_dd)
+        record['dd_count'] = len(active_dd)
     return series
 
 
@@ -275,6 +288,25 @@ def prepare_tse(previous, volume, indices):
                 rec['change'] = round((rec['close'] / prev - 1) * 100, 6)
             else:
                 rec['change'] = numeric(rec.get('change'))
+    # Count TSE DD only after at least 25 valid close/volume sessions
+    # have been observed. Sparse histories must never be relabelled DD1.
+    for key in MARKETS:
+        valid_days = sorted(day for day in history
+                            if numeric(history[day].get(key, {}).get('close')) is not None
+                            and numeric(history[day].get(key, {}).get('volume')) is not None
+                            and numeric(history[day].get(key, {}).get('change')) is not None)
+        dd_active = []
+        for i, day in enumerate(valid_days):
+            record = history[day][key]
+            close = numeric(record['close'])
+            dd_active = [(j, price) for j, price in dd_active
+                         if i-j < 25 and close < price * 1.05]
+            if classify(numeric(record['change']), numeric(record['volume'])) == 'sell' and i >= 24:
+                dd_active.append((i, close))
+                record['dd_number'] = len(dd_active)
+            elif classify(numeric(record['change']), numeric(record['volume'])) == 'sell':
+                dd_active.append((i, close))
+            record['dd_count'] = len(dd_active) if i >= 24 else None
     final = []
     for day in sorted(history, reverse=True)[:PUBLISH_SESSIONS]:
         out = {'date': day}
@@ -285,7 +317,8 @@ def prepare_tse(previous, volume, indices):
             # Never label FTD without a defensible, tested local rebound history.
             out[key] = {'change': price_change, 'volume': volume_change,
                         'judge': classify(price_change, volume_change),
-                        'shares_10000': rec.get('shares_10000')}
+                        'dd_number': rec.get('dd_number'), 'dd_count': rec.get('dd_count'),
+                        'ra_day': None, 'shares_10000': rec.get('shares_10000')}
         final.append(out)
     kept_days = set(sorted(history, reverse=True)[:PUBLISH_SESSIONS])
     snapshots = {key: {day: {'close': history[day][key]['close'], 'low': history[day][key].get('low')}
