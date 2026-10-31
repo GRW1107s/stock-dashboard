@@ -65,6 +65,7 @@ def enrich(prices):
         change=(x['close']/prev['close']-1)*100 if prev else None
         volume=(x['volume']/prev['volume']-1)*100 if prev and prev['volume'] and x['volume'] is not None else None
         judge=None
+        ra_day=None
         if change is not None and volume is not None and volume>0:
             if change>0: judge='buy'
             elif change<=-0.2: judge='sell'
@@ -77,15 +78,30 @@ def enrich(prices):
             elif state=='correction':
                 if change is not None and change>0:
                     p=prices[dates[i-1]]['low'] if i else None
-                    if p is not None: state,base_low,attempt_days='attempt',p,1
+                    if p is not None:
+                        state,base_low,attempt_days='attempt',p,1
+                        ra_day=1
             elif state=='attempt':
                 if low<base_low:
                     state,base_low,attempt_days='correction',low,0
                 else:
                     attempt_days+=1
+                    ra_day=attempt_days
                     if attempt_days>=4 and change is not None and change>=1.25 and volume is not None and volume>0:
                         judge,state='ftd','confirmed'
-        series[day]={'change':round(change,4) if change is not None else None,'volume':round(volume,4) if volume is not None else None,'judge':judge,'close':x['close']}
+        series[day]={'change':round(change,4) if change is not None else None,'volume':round(volume,4) if volume is not None else None,'judge':judge,'close':x['close'],'ra_day':ra_day}
+    # DD count: previous 25 sessions, dropping a DD after a 5% recovery.
+    # This is a transparent simplified count; IBD stalling-day criteria are excluded.
+    active_dd=[]
+    for i,day in enumerate(dates):
+        close=prices[day]['close']
+        active_dd=[(idx,price) for idx,price in active_dd
+                   if i-idx<25 and close < price*1.05]
+        rec=series[day]
+        if rec['judge']=='sell':
+            active_dd.append((i,close))
+            rec['dd_number']=len(active_dd)
+        rec['dd_count']=len(active_dd)
     return series
 
 def main():
