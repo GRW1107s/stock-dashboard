@@ -12,8 +12,7 @@ import urllib.request
 from zoneinfo import ZoneInfo
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-YAHOO = {'sp500': ('^GSPC', 'America/New_York'), 'nasdaq': ('^IXIC', 'America/New_York'), 'nikkei': ('^N225', 'Asia/Tokyo')}
-STOOQ = {'nikkei': '^NKX', 'topix': '^TPX'}
+YAHOO = {'sp500': ('^GSPC', 'America/New_York'), 'nasdaq': ('^IXIC', 'America/New_York')}
 
 
 def valid_number(value):
@@ -45,7 +44,7 @@ def yahoo_fetch(symbol, zone):
                     close_time = dt.time(16, 15) if zone == 'America/New_York' else dt.time(15, 45)
                     if date == now.date() and now.time() < close_time:
                         continue
-                    result[date.isoformat()] = {'close': close, 'low': valid_number(low), 'volume': valid_number(volume)}
+                    result[date.isoformat()] = {'close': close, 'low': valid_number(low) or close, 'volume': valid_number(volume)}
                 if len(result) < 30:
                     raise ValueError(f'Only {len(result)} records')
                 print(f'Yahoo {symbol}: {len(result)} sessions')
@@ -56,163 +55,156 @@ def yahoo_fetch(symbol, zone):
     raise RuntimeError(f'Yahoo {symbol}: {errors}')
 
 
-def stooq_fetch(symbol):
-    today = dt.datetime.now(ZoneInfo('Asia/Tokyo'))
-    params = {'s': symbol, 'i': 'd', 'd1': (today.date() - dt.timedelta(days=1850)).strftime('%Y%m%d'), 'd2': today.strftime('%Y%m%d')}
-    api_key = os.getenv('STOOQ_API_KEY', '').strip()
-    if api_key:
-        params['apikey'] = api_key
-    url = 'https://stooq.com/q/d/l/?' + urllib.parse.urlencode(params)
-    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (compatible; market-dashboard/1.0)', 'Accept': 'text/csv'})
-    with urllib.request.urlopen(req, timeout=25) as response:
-        body = response.read(4_000_000).decode('utf-8-sig', errors='replace')
-    if not body.lstrip().lower().startswith('date,'):
-        raise ValueError('Stooq returned a non-CSV response (possibly API key / access restriction): ' + body[:120].replace('\n', ' '))
-    records = {}
-    for row in csv.DictReader(io.StringIO(body)):
-        close = valid_number(row.get('Close'))
-        if close is None:
-            continue
-        date = row['Date']
-        dt.date.fromisoformat(date)
-        if date == today.date().isoformat() and today.time() < dt.time(15, 45):
-            continue
-        records[date] = {'close': close, 'low': valid_number(row.get('Low')), 'volume': valid_number(row.get('Volume'))}
-    if len(records) < 30:
-        raise ValueError(f'Stooq {symbol}: insufficient data ({len(records)})')
-    print(f'Stooq {symbol}: {len(records)} sessions, {sum(v["volume"] is not None for v in records.values())} with volume')
-    return records
-
-
 def enrich(raw):
-    """IBD-inspired rally attempt / FTD, with Day-1 intraday low as fixed stop.
-
-    No FTD is generated when intraday lows or volume are unavailable.
-    A rally attempt ends immediately on any subsequent day's intraday
-    undercut of its Day-1 low, even if that day closes higher.
-    """
     dates = sorted(raw)
     result = {}
     state = 'normal'
     attempt_day = 0
-    attempt_low = None
-    recent_low = None
-
+    attempt_low = recent_low = None
     for i, date in enumerate(dates):
         item = raw[date]
         prev = raw[dates[i - 1]] if i else None
-        close, low = item['close'], item['low']
-        pct = (close / prev['close'] - 1) * 100 if prev else None
-        volume = item['volume']
-        prev_volume = prev['volume'] if prev else None
-        vol_pct = (volume / prev_volume - 1) * 100 if volume is not None and prev_volume is not None and prev_volume > 0 else None
-        judge = ('buy' if pct is not None and pct > 0 and vol_pct is not None and vol_pct > 0
-                 else 'sell' if pct is not None and pct <= -0.20 and vol_pct is not None and vol_pct > 0
-                 else None)
-        prior_closes = [raw[d]['close'] for d in dates[max(0, i - 60):i]]
-        prior_high = max(prior_closes, default=close)
-        in_correction = close <= prior_high * 0.95
+        pct = (item['close'] / prev['close'] - 1) * 100 if prev else None
+        v, pv = item['volume'], prev['volume'] if prev else None
+        vol_pct = (v / pv - 1) * 100 if v is not None and pv is not None and pv > 0 else None
+        judge = 'buy' if pct is not None and pct > 0 and vol_pct is not None and vol_pct > 0 else ('sell' if pct is not None and pct <= -0.2 and vol_pct is not None and vol_pct > 0 else None)
+        prior_high = max((raw[d]['close'] for d in dates[max(0, i - 60):i]), default=item['close'])
+        correction = item['close'] <= prior_high * 0.95
         ftd = False
-
         if state in ('normal', 'confirmed'):
-            if in_correction:
+            if correction:
                 state = 'correction'
-                recent_low = low
-                attempt_day = 0
-                attempt_low = None
+                recent_low = item['low']
         elif state == 'correction':
-            if low is not None:
-                recent_low = min(recent_low, low) if recent_low is not None else low
-            # A closing up-day begins the attempt. Only a genuine day's low
-            # can provide the reference: never substitute the close for Low.
-            if pct is not None and pct > 0 and low is not None:
-                state = 'attempt'
-                attempt_day = 1
-                attempt_low = low  # FTD rally Day 1's low, fixed for this attempt
+            recent_low = min(recent_low, item['low'])
+            if pct is not None and pct > 0:
+                state, attempt_day, attempt_low = 'attempt', 1, recent_low
         elif state == 'attempt':
-            if low is None:
-                # Do not produce a confirmation with an unverifiable low.
-                state = 'correction'
-                recent_low = None
-                attempt_low = None
-                attempt_day = 0
-            elif low < attempt_low:
-                state = 'correction'
-                recent_low = low
-                attempt_low = None
-                attempt_day = 0
-                # This day is not reused as a new Day 1: look for a later up day.
+            if item['low'] < attempt_low:
+                state, recent_low, attempt_day = 'correction', item['low'], 0
             else:
                 attempt_day += 1
-                if (attempt_day >= 4 and pct is not None and pct >= 1.25
-                        and vol_pct is not None and vol_pct > 0):
-                    ftd = True
-                    state = 'confirmed'
-                    attempt_low = None
-                    attempt_day = 0
-
-        result[date] = {
-            'change': round(pct, 6) if pct is not None else None,
-            'volume': round(vol_pct, 6) if vol_pct is not None else None,
-            'judge': 'ftd' if ftd else judge,
-        }
+                if attempt_day >= 4 and pct is not None and pct >= 1.25 and vol_pct is not None and vol_pct > 0:
+                    ftd, state = True, 'confirmed'
+        result[date] = {'change': round(pct, 6) if pct is not None else None, 'volume': round(vol_pct, 6) if vol_pct is not None else None, 'judge': 'ftd' if ftd else judge}
     return result
 
 
-def prior_japan_data():
-    path = ROOT / 'data.json'
+def load_tse_market_volume():
+    """Load explicitly verified JPX market-segment share volume, in units of 10,000 shares.
+    A separate source-validation process is needed for automatic downloads.
+    """
+    path = ROOT / 'data' / 'tse_market_volume.csv'
     if not path.exists():
-        return {}
-    try:
-        data = json.loads(path.read_text(encoding='utf-8'))
-        result = {}
-        for row in data.get('rows', []):
-            day = row.get('japan_date')
-            if not day:
-                continue
-            result[day] = {key: row.get(key) for key in ('nikkei', 'topix')}
-        return result
-    except (OSError, ValueError, TypeError):
-        return {}
+        print('WARNING: TSE volume CSV missing; panel will be empty')
+        return []
+    rows = []
+    with path.open(encoding='utf-8-sig', newline='') as f:
+        for raw in csv.DictReader(f):
+            day = raw['date']
+            dt.date.fromisoformat(day)
+            item = {'date': day}
+            for key in ('prime', 'standard', 'growth'):
+                val = raw.get(key, '').strip()
+                item[key] = int(val) if val else None
+                pctval = raw.get(key + '_pct', '').strip()
+                item[key + '_pct'] = float(pctval) if pctval else None
+            rows.append(item)
+    return sorted(rows, key=lambda x: x['date'], reverse=True)
 
+
+
+
+def load_tse_market_indices(market_volume):
+    """Optional manually licensed/verified close + low prices per segment.
+    CSV headers: date,prime,standard,growth (optional: prime_low,standard_low,growth_low).
+    No automatic market-index feed is implied.
+    """
+    path = ROOT / 'data' / 'tse_market_index.csv'
+    if not path.exists():
+        print('INFO: market index close CSV not found; P/S/G price and judgement unavailable')
+        return {}
+    raw = {key: {} for key in ('prime', 'standard', 'growth')}
+    with path.open(encoding='utf-8-sig', newline='') as f:
+        for row in csv.DictReader(f):
+            day = row['date'].strip()
+            dt.date.fromisoformat(day)
+            for key in raw:
+                close = valid_number(row.get(key))
+                if close is None:
+                    continue
+                raw[key][day] = {'close': close,
+                                 'low': valid_number(row.get(key + '_low')) or close,
+                                 'volume': None}
+    volume_by_date = {row['date']: row for row in market_volume}
+    result = {}
+    for key in raw:
+        dates = sorted(raw[key])
+        # Calculate volume change from the matching market-wide exchange volume,
+        # not index-constituent volume.
+        data = {}
+        for i, day in enumerate(dates):
+            current = raw[key][day]['close']
+            prior = raw[key][dates[i-1]]['close'] if i else None
+            price_change = (current / prior - 1) * 100 if prior else None
+            volume_change = volume_by_date.get(day, {}).get(key + '_pct')
+            judge = None
+            if price_change is not None and volume_change is not None and volume_change > 0:
+                judge = 'buy' if price_change > 0 else ('sell' if price_change <= -0.2 else None)
+            data[day] = {'change': round(price_change, 6) if price_change is not None else None,
+                         'volume': volume_change, 'judge': judge}
+        result[key] = data
+    return result
 
 def main():
     data = {}
     for key in ('sp500', 'nasdaq'):
         data[key] = enrich(yahoo_fetch(*YAHOO[key]))
-    for key in ('nikkei', 'topix'):
+    market_volume = load_tse_market_volume()
+    tse_index_data = load_tse_market_indices(market_volume)
+    # Japan sessions are sourced from the verified market-volume CSV and any
+    # previously published TSE data; do not fabricate trading dates.
+    old_path = ROOT / 'data.json'
+    previous_tse = []
+    if old_path.exists():
         try:
-            data[key] = enrich(stooq_fetch(STOOQ[key]))
-        except Exception as exc:
-            print(f'WARNING: Stooq {key} unavailable: {exc}')
-            if key == 'nikkei':
-                try:
-                    data[key] = enrich(yahoo_fetch(*YAHOO[key]))
-                except Exception as fallback_error:
-                    print(f'WARNING: Yahoo Nikkei unavailable: {fallback_error}')
-                    data[key] = {}
-            else:
-                data[key] = {}
-    previous = prior_japan_data()
+            previous_tse = json.loads(old_path.read_text(encoding='utf-8')).get('tse_rows', [])
+        except (ValueError, OSError, TypeError):
+            pass
+    japanese_dates = sorted(set(item['date'] for item in market_volume) |
+                            set(item['date'] for item in previous_tse if isinstance(item, dict) and item.get('date')))
     usa = sorted(set(data['sp500']) & set(data['nasdaq']), reverse=True)
-    japanese_dates = sorted(set(data['nikkei']) | set(data['topix']) | set(previous))
     rows = []
     for us_day in usa:
         index = bisect.bisect_right(japanese_dates, us_day)
         jp_day = japanese_dates[index] if index < len(japanese_dates) else None
-        row = {'date': us_day, 'japan_date': jp_day}
-        for key in ('sp500', 'nasdaq'):
-            row[key] = data[key].get(us_day)
-        for key in ('nikkei', 'topix'):
-            current = data[key].get(jp_day) if jp_day else None
-            fallback = previous.get(jp_day, {}).get(key) if jp_day else None
-            row[key] = current if current is not None else fallback
-        rows.append(row)
+        rows.append({'date': us_day, 'japan_date': jp_day,
+                     'sp500': data['sp500'].get(us_day),
+                     'nasdaq': data['nasdaq'].get(us_day)})
     if len(rows) < 25:
         raise ValueError('Too few US index records')
-    result = {'updated_at': dt.datetime.now(dt.timezone.utc).isoformat(timespec='seconds'), 'source': 'Yahoo Finance (US), Stooq (JP, when available); Yahoo fallback Nikkei', 'rows': rows}
+    tse_rows = []
+    for item in market_volume:
+        date = item['date']
+        out = {'date': date}
+        for key in ('prime', 'standard', 'growth'):
+            current = tse_index_data.get(key, {}).get(date)
+            out[key] = current or {'change': None, 'volume': item.get(key + '_pct'), 'judge': None}
+            out[key]['shares_10000'] = item.get(key)
+        tse_rows.append(out)
+    # Preserve any existing historical market rows when the local CSV is limited.
+    old_path = ROOT / 'data.json'
+    if old_path.exists():
+        try:
+            previous_rows = json.loads(old_path.read_text(encoding='utf-8')).get('tse_rows', [])
+            known = {r['date'] for r in tse_rows}
+            tse_rows.extend(r for r in previous_rows if isinstance(r, dict) and r.get('date') and r['date'] not in known)
+        except (ValueError, OSError, TypeError, KeyError):
+            pass
+    tse_rows.sort(key=lambda r: r['date'], reverse=True)
+    result = {'updated_at': dt.datetime.now(dt.timezone.utc).isoformat(timespec='seconds'), 'source': 'Yahoo Finance (US indices); verified TSE market-volume CSV', 'rows': rows, 'tse_market_volume': market_volume, 'tse_rows': tse_rows}
     (ROOT / 'data.json').write_text(json.dumps(result, ensure_ascii=False), encoding='utf-8')
-    print(f'Saved {len(rows)} rows; TOPIX latest available: {next((r["japan_date"] for r in rows if r["topix"]), "none")}')
+    print(f'Saved {len(rows)} rows; TSE market days: {len(tse_rows)}')
 
 
 if __name__ == '__main__':
