@@ -1,101 +1,134 @@
-#!/usr/bin/env python3
-"""Fetch QQQ/SPY daily (unadjusted) closing prices and create GitHub Pages data.json.
 
-Uses Yahoo Finance's public chart endpoint (not an official supported data API).
-No user secrets or Python third-party dependencies are required.
-"""
 import datetime as dt
 import json
 import math
 import pathlib
-import random
 import time
-import urllib.error
 import urllib.parse
 import urllib.request
 from zoneinfo import ZoneInfo
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-UA = "Mozilla/5.0 (compatible; StockDashboard/1.0; daily-price-table)"
 
+SYMBOLS = {
+    "sp500": "^GSPC",
+    "nasdaq": "^IXIC"
+}
 
-def fetch_chart(symbol):
-    params = urllib.parse.urlencode({"range": "5y", "interval": "1d"})
+def fetch_prices(symbol):
+    params = urllib.parse.urlencode({
+        "range": "5y",
+        "interval": "1d"
+    })
+
+    ny = ZoneInfo("America/New_York")
+    now = dt.datetime.now(ny)
     errors = []
-    for host in ("query1.finance.yahoo.com", "query2.finance.yahoo.com"):
+
+    for host in ["query1.finance.yahoo.com", "query2.finance.yahoo.com"]:
         url = f"https://{host}/v8/finance/chart/{symbol}?{params}"
+
         for attempt in range(2):
             try:
-                request = urllib.request.Request(
-                    url, headers={"User-Agent": UA, "Accept": "application/json"}
+                req = urllib.request.Request(
+                    url,
+                    headers={
+                        "User-Agent": "Mozilla/5.0",
+                        "Accept": "application/json"
+                    }
                 )
-                with urllib.request.urlopen(request, timeout=25) as response:
-                    payload = json.load(response)
-                result = (payload.get("chart") or {}).get("result")
-                if not result:
-                    raise ValueError(f"empty chart result: {str(payload)[:200]}")
-                info = result[0]
-                timestamps = info.get("timestamp", [])
-                quotes = (info.get("indicators") or {}).get("quote", [])
-                closes = quotes[0].get("close", []) if quotes else []
-                if len(timestamps) != len(closes):
-                    raise ValueError("timestamps and closes have different lengths")
+
+                with urllib.request.urlopen(req, timeout=25) as response:
+                    data = json.load(response)
+
+                chart = data["chart"]["result"][0]
+                timestamps = chart["timestamp"]
+                closes = chart["indicators"]["quote"][0]["close"]
+
                 prices = {}
-                ny_tz = ZoneInfo("America/New_York")
-                now_ny = dt.datetime.now(dt.timezone.utc).astimezone(ny_tz)
-                for stamp, close in zip(timestamps, closes):
-                    if close is None or not isinstance(close, (int, float)) or not math.isfinite(close) or close <= 0:
+
+                for ts, close in zip(timestamps, closes):
+                    if close is None or not math.isfinite(close) or close <= 0:
                         continue
-                    market_day = dt.datetime.fromtimestamp(stamp, tz=ny_tz).date()
-                    # Avoid displaying a still-forming daily candle when run during US market hours.
-                    if market_day == now_ny.date() and now_ny.time() < dt.time(16, 15):
+
+                    day = dt.datetime.fromtimestamp(ts, ny).date()
+
+                    # 当日の取引が終了する前のデータは除外
+                    if day == now.date() and now.time() < dt.time(16, 15):
                         continue
-                    prices[market_day.isoformat()] = float(close)
+
+                    prices[day.isoformat()] = float(close)
+
                 if len(prices) < 30:
-                    raise ValueError(f"too few usable prices for {symbol}: {len(prices)}")
-                print(f"{symbol}: {len(prices)} trading days from {host}")
+                    raise ValueError("価格データが不足しています")
+
+                print(f"{symbol}: {len(prices)} days fetched")
                 return prices
-            except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as err:
-                errors.append(f"{host} attempt {attempt+1}: {err}")
+
+            except Exception as e:
+                errors.append(str(e))
                 time.sleep(2 + attempt * 3)
-    raise RuntimeError(f"Unable to download {symbol} prices: {' | '.join(errors)}")
+
+    raise RuntimeError(f"{symbol} の取得に失敗: {errors}")
 
 
-def pct_changes(prices):
-    """Compute close-to-previous-available-trading-day price returns."""
-    days = sorted(prices)
-    result = {}
-    for previous, current in zip(days, days[1:]):
-        result[current] = (prices[current] / prices[previous] - 1) * 100
-    return result
+def calculate_returns(prices):
+    days = sorted(prices.keys())
+    returns = {}
 
+    for i in range(1, len(days)):
+        previous = prices[days[i - 1]]
+        current = prices[days[i]]
 
-def build_rows(qqq_prices, spy_prices):
-    qqq = pct_changes(qqq_prices)
-    spy = pct_changes(spy_prices)
-    rows = []
-    for date in sorted(qqq.keys() & spy.keys(), reverse=True):
-        rows.append({"date": date, "qqq": round(qqq[date], 6), "spy": round(spy[date], 6)})
-    if len(rows) < 30:
-        raise ValueError(f"too few matching days: {len(rows)}")
-    newest = dt.date.fromisoformat(rows[0]["date"])
-    if (dt.datetime.now(dt.timezone.utc).date() - newest).days > 10:
-        raise ValueError(f"data appears stale: newest date {newest}")
-    return rows
+        returns[days[i]] = (current / previous - 1) * 100
+
+    return returns
 
 
 def main():
-    qqq = fetch_chart("QQQ")
-    spy = fetch_chart("SPY")
-    rows = build_rows(qqq, spy)
-    result = {
-        "source": "Yahoo Finance chart endpoint (unadjusted closing price)",
-        "updated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
-        "rows": rows,
+    series = {}
+
+    for name, symbol in SYMBOLS.items():
+        prices = fetch_prices(symbol)
+        series[name] = calculate_returns(prices)
+
+    common_dates = sorted(
+        set(series["sp500"]) & set(series["nasdaq"]),
+        reverse=True
+    )
+
+    rows = []
+
+    for day in common_dates:
+        rows.append({
+            "date": day,
+            "sp500": round(series["sp500"][day], 6),
+            "nasdaq": round(series["nasdaq"][day], 6)
+        })
+
+    if len(rows) < 30:
+        raise ValueError("共通する営業日データが不足しています")
+
+    latest = dt.date.fromisoformat(rows[0]["date"])
+    if (dt.datetime.now(dt.timezone.utc).date() - latest).days > 10:
+        raise ValueError("取得データが古すぎます")
+
+    output = {
+        "updated_at": dt.datetime.now(
+            dt.timezone.utc
+        ).isoformat(timespec="seconds"),
+        "source": "Yahoo Finance",
+        "rows": rows
     }
-    output = ROOT / "data.json"
-    output.write_text(json.dumps(result, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    print(f"Wrote {output}: {len(rows)} days, last date {rows[0]['date']}")
+
+    path = ROOT / "data.json"
+
+    path.write_text(
+        json.dumps(output, ensure_ascii=False),
+        encoding="utf-8"
+    )
+
+    print(f"Saved {len(rows)} rows to {path}")
 
 
 if __name__ == "__main__":
