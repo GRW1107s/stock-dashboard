@@ -1,116 +1,30 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>米国市場 日次騰落率</title>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>市場定点観測 | 4指数</title>
 <style>
-*{box-sizing:border-box}
-body{margin:0;background:#f8fafc;color:#1e293b;font-family:Arial,'Noto Sans JP',sans-serif}
-main{max-width:1150px;margin:24px auto;padding:0 14px}
-h1{font-size:24px;margin:0 0 6px}.subtitle,.info{color:#64748b;font-size:12px}
-.description,.summary,.history{background:white;border:1px solid #e2e8f0;border-radius:10px}
-.description{padding:12px 16px;margin:18px 0;font-size:13px;line-height:1.65}
-.description p{margin:5px 0}.description small{display:block;margin-top:8px;color:#64748b}
-.mark{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-size:15px;font-weight:700;line-height:1;vertical-align:middle}
-.mark.buy{color:#15803d;background:#dcfce7}.mark.sell{color:#dc2626;background:#fee2e2}
-.section-title{font-size:14px;font-weight:700;margin:0 0 10px}
-.summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.summary{padding:13px 16px}.summary h3{margin:0 0 10px;font-size:14px}
-.counts{display:flex;gap:16px;align-items:center;flex-wrap:wrap;font-size:13px}
-.counts strong{font-size:20px;font-variant-numeric:tabular-nums}.count-buy{color:#15803d}.count-sell{color:#dc2626}
-.history{margin-top:10px;padding:13px 16px}.history-head{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:12px}
-.history-head .section-title{margin:0}.history-head small{font-size:11px;color:#64748b}
-.history-row{display:grid;grid-template-columns:100px minmax(0,1fr);gap:12px;align-items:center;margin:11px 0}
-.history-label{font-size:12px;font-weight:700;white-space:nowrap}
-.blocks{display:grid;grid-template-columns:repeat(25,minmax(0,1fr));gap:3px}
-.block{height:17px;border-radius:3px;background:#e9edf3;min-width:0}
-.block.buy{background:#16a34a}.block.sell{background:#dc2626}
-.legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;font-size:11px;color:#64748b}
-.legend span{display:inline-flex;align-items:center;gap:5px}.legend i{width:10px;height:10px;border-radius:2px;background:#e9edf3;display:inline-block}.legend i.buy{background:#16a34a}.legend i.sell{background:#dc2626}
-.controls{display:flex;gap:8px;margin:22px 0 12px;flex-wrap:wrap}
-button{padding:9px 13px;border:1px solid #cbd5e1;background:white;border-radius:7px;cursor:pointer;font-size:13px}
-button.active{background:#1e293b;color:#fff}
-.table-box{background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow-x:auto}
-table{width:100%;min-width:730px;border-collapse:collapse;text-align:center}
-thead th{background:#f1f5f9;color:#475569;padding:12px 7px;font-size:13px;white-space:nowrap}
-thead tr:first-child th{font-size:14px;border-bottom:1px solid #cbd5e1}
-tbody td{padding:10px 7px;border-top:1px solid #e2e8f0;font-size:13px;white-space:nowrap}
-tbody td:nth-child(5),thead tr:nth-child(2) th:nth-child(4){border-left:2px solid #cbd5e1}
-tbody tr:nth-child(even){background:#fafbfc}tbody tr:hover{background:#f1f5f9}
-.date,.volume{color:#475569;font-variant-numeric:tabular-nums}
-.pct{display:inline-block;padding:6px;min-width:77px;border-radius:6px;font-weight:700;font-variant-numeric:tabular-nums}
-.up{color:#15803d;background:#dcfce7}.down{color:#dc2626;background:#fee2e2}.flat{color:#475569;background:#e2e8f0}.judge-empty{color:#94a3b8}
-@media(max-width:600px){main{padding:0 10px;margin:18px auto}h1{font-size:21px}.summary{padding:10px}.summary h3{font-size:12px}.counts{gap:8px;font-size:11px}.counts strong{font-size:17px}.history{padding:12px 9px}.history-row{grid-template-columns:72px minmax(0,1fr);gap:7px}.history-label{font-size:10px}.blocks{gap:2px}.block{height:13px}.history-head small{font-size:9px}}
+*{box-sizing:border-box}body{margin:0;background:#f6f8fb;color:#202b3e;font:12px/1.4 Arial,'Noto Sans JP',sans-serif}main{max-width:1540px;margin:15px auto;padding:0 12px}h1{font-size:19px;margin:0 0 3px}.sub,.muted{color:#64748b;font-size:11px}.info{display:flex;gap:9px;flex-wrap:wrap;margin:10px 0}.info span{white-space:nowrap}.summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:11px 0 7px}.tile{border:1px solid #dce4ee;background:white;border-radius:7px;padding:9px 10px;min-width:0}.tile-name{font-weight:700;font-size:12px}.tile-count{color:#c62836;font-weight:750;font-size:17px;white-space:nowrap}.tile-sub{font-size:10px;color:#64748b}.history{background:#fff;border:1px solid #dce4ee;border-radius:7px;padding:9px 10px;margin-bottom:10px}.history h2{font-size:12px;margin:0 0 7px}.history-row{display:grid;grid-template-columns:88px minmax(0,1fr);align-items:center;gap:8px;margin:5px 0}.history-name{font-weight:600;font-size:11px}.squares{display:grid;grid-template-columns:repeat(25,minmax(0,1fr));gap:2px}.square{height:11px;background:#e5e9ef;border-radius:1px;min-width:0}.square.buy{background:#b0b7c2}.square.sell{background:#e0646a}.square.ftd{background:#20a35d}.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:10px;color:#64748b;margin-top:8px}.dot{width:9px;height:9px;display:inline-block;vertical-align:middle;margin-right:3px;background:#e5e9ef}.dot.buy{background:#b0b7c2}.dot.sell{background:#e0646a}.dot.ftd{background:#20a35d}.buttons{display:flex;gap:5px;margin:9px 0}.buttons button{padding:5px 10px;border:1px solid #d8e1ed;border-radius:5px;background:white;color:#334155;cursor:pointer;font-size:11px}.buttons button.active{color:white;background:#293648}.table-wrap{overflow-x:auto;background:white;border:1px solid #dce4ee;border-radius:7px}table{border-collapse:collapse;width:100%;table-layout:fixed;min-width:900px;font-variant-numeric:tabular-nums}col{width:7.6923%}th,td{height:26px;padding:3px 2px;text-align:center;border-bottom:1px solid #e9edf2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}thead th{background:#eef2f7;color:#475569;font-size:10px}thead tr:first-child th{height:27px;font-size:12px;border-bottom:1px solid #d5dce6}thead tr:last-child th{height:24px}th.group-start,td.group-start{border-left:2px solid #d6dee9}tbody tr:nth-child(even){background:#f9fafc}tbody tr:hover{background:#eef4ff}.p{font-weight:700}.positive{color:#16834c}.negative{color:#c33445}.flag{display:inline-block;border-radius:4px;padding:1px 5px;font-weight:700}.flag.buy{color:#6b7483;background:#e9ebef}.flag.sell{color:#c62836;background:#fde7e8}.flag.ftd{color:#fff;background:#179957}.none{color:#adb5c1}.rule{font-size:11px;margin-top:10px;color:#526173}.footer{color:#64748b;font-size:10px;margin:8px 0}.warn{color:#b45309}.japan-date{color:#7a8799;font-size:10px} @media(max-width:850px){main{padding:0 6px}.summary{gap:3px}.tile{padding:6px}.tile-name{font-size:10px}.tile-count{font-size:14px}.history-row{grid-template-columns:71px minmax(0,1fr);gap:3px}.history-name{font-size:10px}.squares{gap:1px}.square{height:9px}}
 </style>
 </head>
-<body>
-<main>
-<h1>米国市場 日次騰落率</h1>
-<p class="subtitle">S&P500・NASDAQ総合｜変動率・出来高前日比・売買圧力の判定</p>
-<div class="description">
-<p><span class="mark buy">✓</span> <strong>買い集め日：</strong>指数が前営業日比で上昇し、出来高も前営業日より増加した日。</p>
-<p><span class="mark sell">×</span> <strong>売り抜け日：</strong>指数が前営業日比で0.20%以上下落し、出来高も前営業日より増加した日。</p>
-<small>IBDの考え方を参考にした簡易判定です。機関投資家の売買を直接確認したものではありません。出来高が欠損している日は判定しません。</small>
-</div>
-<h2 class="section-title">直近25取引日の売買圧力</h2>
-<div class="summary-grid">
-<section class="summary"><h3>S&P500</h3><div class="counts"><span class="count-buy">✓ 買い集め <strong id="sp-buy">—</strong>日</span><span class="count-sell">× 売り抜け <strong id="sp-sell">—</strong>日</span></div></section>
-<section class="summary"><h3>NASDAQ総合</h3><div class="counts"><span class="count-buy">✓ 買い集め <strong id="nas-buy">—</strong>日</span><span class="count-sell">× 売り抜け <strong id="nas-sell">—</strong>日</span></div></section>
-</div>
-<section class="history">
-<div class="history-head"><h2 class="section-title">25取引日の判定履歴</h2><small>左：古い → 右：最新</small></div>
-<div class="history-row"><span class="history-label">S&P500</span><div id="sp-blocks" class="blocks" aria-label="S&P500の判定履歴"></div></div>
-<div class="history-row"><span class="history-label">NASDAQ総合</span><div id="nas-blocks" class="blocks" aria-label="NASDAQ総合の判定履歴"></div></div>
-<div class="legend"><span><i class="buy"></i>買い集め</span><span><i class="sell"></i>売り抜け</span><span><i></i>通常日・データなし</span></div>
-</section>
-<div class="controls">
-<button class="active" onclick="showRows(25,this)">直近25取引日</button>
-<button onclick="showRows(90,this)">直近90取引日</button>
-<button onclick="showRows(0,this)">すべて</button>
-</div>
-<div class="table-box"><table><thead><tr><th rowspan="2">日付</th><th colspan="3">S&P500</th><th colspan="3">NASDAQ総合</th></tr><tr><th>変動率</th><th>出来高</th><th>判定</th><th>変動率</th><th>出来高</th><th>判定</th></tr></thead><tbody id="data-body"><tr><td colspan="7">読み込み中...</td></tr></tbody></table></div>
-<p id="count" class="info"></p><p id="updated" class="info"></p><p class="info">出来高は前営業日比（%）。米国市場の終値ベース。データ元：Yahoo Finance（非公式API）。</p>
-</main>
-<script>
-let allData=[];
-function typeOfDay(price,volume){
-  if(typeof price!=='number'||!Number.isFinite(price)||typeof volume!=='number'||!Number.isFinite(volume)||volume<=0)return '';
-  if(price>0)return 'buy';
-  if(price<=-0.20)return 'sell';
-  return '';
-}
-function pct(value){if(typeof value!=='number'||!Number.isFinite(value))return '<span class="pct flat">—</span>';const cls=value>0?'up':value<0?'down':'flat';return `<span class="pct ${cls}">${value>0?'+':''}${value.toFixed(2)}%</span>`}
-function volumePct(value){return typeof value==='number'&&Number.isFinite(value)?`<span class="volume">${value>0?'+':''}${value.toFixed(2)}%</span>`:'—'}
-function judge(price,volume){const type=typeOfDay(price,volume);if(type==='buy')return '<span class="mark buy" title="買い集め日" aria-label="買い集め日">✓</span>';if(type==='sell')return '<span class="mark sell" title="売り抜け日" aria-label="売り抜け日">×</span>';return '<span class="judge-empty">—</span>'}
-function renderSummary(){
- const last25=allData.slice(0,25);
- for(const [prefix,priceKey,volumeKey] of [['sp','sp500','sp500_volume'],['nas','nasdaq','nasdaq_volume']]){
-   const days=last25.map(r=>({date:r.date,price:r[priceKey],volume:r[volumeKey],type:typeOfDay(r[priceKey],r[volumeKey])}));
-   document.getElementById(prefix+'-buy').textContent=days.filter(d=>d.type==='buy').length;
-   document.getElementById(prefix+'-sell').textContent=days.filter(d=>d.type==='sell').length;
-   const blocks=document.getElementById(prefix+'-blocks');blocks.replaceChildren();
-   const oldestFirst=days.slice().reverse();
-   const padding=Math.max(0,25-oldestFirst.length);
-   for(let i=0;i<padding;i++){const block=document.createElement('span');block.className='block';block.title='データなし';blocks.append(block)}
-   oldestFirst.forEach(d=>{const block=document.createElement('span');block.className='block '+d.type;const sign=n=>typeof n==='number'&&Number.isFinite(n)?`${n>0?'+':''}${n.toFixed(2)}%`:'—';block.title=`${d.date.replace(/-/g,'/')}｜変動率 ${sign(d.price)}｜出来高 ${sign(d.volume)}｜${d.type==='buy'?'買い集め':d.type==='sell'?'売り抜け':'通常日・判定なし'}`;blocks.append(block)});
- }
-}
-function showRows(limit,button){
- if(button){document.querySelectorAll('.controls button').forEach(b=>b.classList.remove('active'));button.classList.add('active')}
- const rows=limit===0?allData:allData.slice(0,limit);
- const body=document.getElementById('data-body');
- body.innerHTML=rows.length?rows.map(r=>`<tr><td class="date">${r.date.replace(/-/g,'/')}</td><td>${pct(r.sp500)}</td><td>${volumePct(r.sp500_volume)}</td><td>${judge(r.sp500,r.sp500_volume)}</td><td>${pct(r.nasdaq)}</td><td>${volumePct(r.nasdaq_volume)}</td><td>${judge(r.nasdaq,r.nasdaq_volume)}</td></tr>`).join(''):'<tr><td colspan="7">表示できるデータがありません</td></tr>';
- document.getElementById('count').textContent=`${rows.length}件表示 / 全${allData.length}件`;
-}
-fetch('./data.json?t='+Date.now(),{cache:'no-store'})
-.then(response=>{if(!response.ok)throw Error('データ取得失敗');return response.json()})
-.then(data=>{
- if(!Array.isArray(data.rows))throw Error('データ形式が不正です');
- allData=data.rows.filter(r=>typeof r.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(r.date)&&typeof r.sp500==='number'&&Number.isFinite(r.sp500)&&typeof r.nasdaq==='number'&&Number.isFinite(r.nasdaq)).sort((a,b)=>b.date.localeCompare(a.date));
- renderSummary();showRows(25);
- if(data.updated_at){const d=new Date(data.updated_at);if(!Number.isNaN(d.getTime()))document.getElementById('updated').textContent='最終更新：'+d.toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})}
-}).catch(error=>{document.getElementById('data-body').innerHTML='<tr><td colspan="7">データを読み込めませんでした。GitHub Actionsを確認してください。</td></tr>';console.error(error)});
-</script>
-</body>
-</html>
+<body><main>
+<h1>市場定点観測</h1><div class="sub">S&P500・NASDAQ総合・日経225・TOPIX / 変動率・出来高前日比・判定</div>
+<section class="summary" id="summary"></section>
+<section class="history"><h2>直近25取引日の判定履歴 <span class="muted">（左：古い → 右：新しい）</span></h2><div id="history"></div><div class="legend"><span><i class="dot buy"></i>買い集め</span><span><i class="dot sell"></i>売り抜け</span><span><i class="dot ftd"></i>FTD</span><span><i class="dot"></i>通常・不明</span></div></section>
+<div class="buttons"><button class="active" onclick="draw(25,this)">25取引日</button><button onclick="draw(90,this)">90取引日</button><button onclick="draw(0,this)">すべて</button></div>
+<div class="table-wrap"><table><colgroup id="cols"></colgroup><thead><tr><th rowspan="2">日付</th><th colspan="3" class="group-start">S&P500</th><th colspan="3" class="group-start">NASDAQ総合</th><th colspan="3" class="group-start">日経225（翌営業日）</th><th colspan="3" class="group-start">TOPIX（翌営業日）</th></tr><tr id="subhead"></tr></thead><tbody id="body"><tr><td colspan="13">読み込み中…</td></tr></tbody></table></div>
+<div id="status" class="footer"></div>
+<p class="rule">判定：<b>✓</b> 買い集め＝上昇＋出来高増加（灰色） ／ <b>×</b> 売り抜け＝0.20%以上下落＋出来高増加（赤色） ／ <b>FTD</b>＝調整後の反発試行4日目以降、1.25%以上上昇＋出来高増加（緑色）。</p>
+<p class="footer">FTDは「過去60取引日高値から5%以上下落」を反発試行の起点に使う独自の簡易判定です。公式IBD判定ではありません。指数出来高には欠損・定義差があります。日経225・TOPIXは米国の日付の<b>翌日本営業日</b>に対応し、未確定分は「—」表示です。各指数の25日集計は各指数の直近25観測日を基準とします。データ：Yahoo Finance（非公式）。</p>
+</main><script>
+const markets=[['sp500','S&P500'],['nasdaq','NASDAQ総合'],['nikkei','日経225'],['topix','TOPIX']];let rows=[];
+document.getElementById('cols').innerHTML='<col>'.repeat(13);
+document.getElementById('subhead').innerHTML=markets.map(()=>'<th class="group-start">変動率</th><th>出来高</th><th>判定</th>').join('');
+const valid=n=>typeof n==='number'&&Number.isFinite(n);const fmt=n=>valid(n)?`${n>0?'+':''}${n.toFixed(2)}%`:'—';
+const cls=n=>!valid(n)?'':n>0?'positive':n<0?'negative':'';
+function mark(d){if(!d)return '—';const k=d.judge;if(k==='ftd')return '<span class="flag ftd">FTD</span>';if(k==='buy')return '<span class="flag buy">✓</span>';if(k==='sell')return '<span class="flag sell">×</span>';return '<span class="none">—</span>'}
+function allFor(key){const map=new Map();for(const r of rows){const date=key==='nikkei'||key==='topix'?r.japan_date:r.date;if(date&&r[key])map.set(date,{date,...r[key]});}return [...map.values()].sort((a,b)=>b.date.localeCompare(a.date));}
+function updateSummary(){const summary=document.getElementById('summary'),hist=document.getElementById('history');summary.innerHTML='';hist.innerHTML='';for(const [key,label] of markets){const arr=allFor(key).slice(0,25);const sells=arr.filter(v=>v.judge==='sell').length;const ft=arr.filter(v=>v.judge==='ftd').length;summary.innerHTML+=`<div class="tile"><div class="tile-name">${label}</div><div class="tile-count">× ${sells}日 <span style="color:#159657;font-size:11px">FTD ${ft}</span></div><div class="tile-sub">直近${arr.length}取引日・売り抜け</div></div>`;hist.innerHTML+=`<div class="history-row"><span class="history-name">${label}</span><div class="squares">${arr.slice().reverse().map(v=>`<span class="square ${v.judge||''}" title="${v.date.replaceAll('-','/')}｜変動率 ${fmt(v.change)}｜出来高 ${fmt(v.volume)}｜${v.judge||'通常'}"></span>`).join('')}${'<span class="square" title="データなし"></span>'.repeat(Math.max(0,25-arr.length))}</div></div>`;}}
+function draw(limit,button){if(button){document.querySelectorAll('.buttons button').forEach(b=>b.classList.remove('active'));button.classList.add('active')}const selected=limit?rows.slice(0,limit):rows;document.getElementById('body').innerHTML=selected.map(r=>`<tr><td title="米国市場日付">${r.date.replaceAll('-','/')}</td>${markets.map(([key])=>{const d=r[key];const title=(key==='nikkei'||key==='topix')&&r.japan_date?` title="日本 ${r.japan_date.replaceAll('-','/')}"`:'';return `<td class="group-start p ${cls(d?.change)}"${title}>${fmt(d?.change)}</td><td class="${cls(d?.volume)}"${title}>${fmt(d?.volume)}</td><td${title}>${mark(d)}</td>`}).join('')}</tr>`).join('')||'<tr><td colspan="13">データなし</td></tr>';document.getElementById('status').textContent=`${selected.length}日表示 / 全${rows.length}日`;}
+fetch('./data.json?t='+Date.now(),{cache:'no-store'}).then(r=>{if(!r.ok)throw Error(`HTTP ${r.status}`);return r.json()}).then(data=>{if(!Array.isArray(data.rows))throw Error('データ形式不一致。update_data.pyを先に更新してください。');if(!data.rows.every(r=>r.sp500&&typeof r.sp500==='object'&&'change'in r.sp500))throw Error('旧形式のdata.jsonです。GitHub Actionsを再実行してください。');rows=data.rows.slice().sort((a,b)=>b.date.localeCompare(a.date));updateSummary();draw(25);document.getElementById('status').textContent+=` ｜ 最終更新 ${data.updated_at?new Date(data.updated_at).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'}):'不明'}`}).catch(e=>{document.getElementById('body').innerHTML='<tr><td colspan="13" class="warn">読み込みに失敗しました。GitHub Actionsのログを確認してください。</td></tr>';document.getElementById('status').textContent=e.message;console.error(e)});
+</script></body></html>
