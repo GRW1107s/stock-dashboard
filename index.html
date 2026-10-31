@@ -53,7 +53,7 @@ function renderSummary(){
     const sells=days.filter(x=>x.judge==='sell').length;
     const ftds=days.filter(x=>x.judge==='ftd').length;
     const valid=days.some(x=>hasNum(x.change)&&hasNum(x.volume));
-    return `<div class="card"><b>${name}</b><div class="counts">× ${valid?sells+'日':'—'}　<span style="color:#15803d">FTD ${valid?ftds:'—'}</span></div></div>`;
+    const latest=days[0];return `<div class="card"><b>${name}</b><div class="counts">DD ${latest?.dd_count??'—'}　<span style="color:#1d4ed8">RA ${latest?.ra_day??'—'}</span></div><div class="muted">× ${valid?sells+'日':'—'}　FTD ${valid?ftds:'—'}</div></div>`;
   }).join('');
   // All five series share the same 25 US-session columns; never filter away missing Japanese rows.
   const selected=rows.slice(0,25);
