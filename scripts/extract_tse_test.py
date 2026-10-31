@@ -1,113 +1,121 @@
-"""Diagnostic only: inspect publicly served market data formats; does not republish data."""
-import csv
-import io
+"""Diagnostics: verify parsed TSE market-volume rows and inspect index source availability.
+No site data is written to disk or republished. Check source terms before production use.
+"""
+import datetime as dt
 import json
 import re
+import urllib.error
+import urllib.parse
 import urllib.request
-from collections import Counter
 from html.parser import HTMLParser
-from urllib.parse import urljoin
 
-HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; market-data-format-check/1.0)", "Accept": "application/json,text/html,*/*"}
-
-
-def download(url):
-    req = urllib.request.Request(url, headers=HEADERS)
-    with urllib.request.urlopen(req, timeout=25) as response:
-        body = response.read(5_000_000)
-        return response.status, response.geturl(), body.decode('utf-8-sig', errors='replace')
+HEADERS = {"User-Agent":"Mozilla/5.0 (compatible; market-dashboard-source-check/1.0)","Accept":"text/html,application/json,*/*"}
 
 
-class TableReader(HTMLParser):
+def get(url):
+    request = urllib.request.Request(url, headers=HEADERS)
+    with urllib.request.urlopen(request, timeout=25) as response:
+        content = response.read(5_000_000)
+        charset = response.headers.get_content_charset() or "utf-8"
+        return response.status, response.geturl(), content.decode(charset, errors="replace")
+
+
+class Tables(HTMLParser):
     def __init__(self):
-        super().__init__()
-        self.tables = []
-        self.current = None
-        self.row = None
-        self.cell = None
-        self.in_script = False
-
+        super().__init__(); self.tables=[]; self.table=None; self.row=None; self.cell=None
     def handle_starttag(self, tag, attrs):
-        if tag == 'script': self.in_script = True
-        if tag == 'table':
-            if self.current is None: self.current = []
-        elif self.current is not None and tag == 'tr': self.row = []
-        elif self.row is not None and tag in ('td', 'th'): self.cell = []
-
+        if tag == 'table' and self.table is None: self.table=[]
+        elif tag == 'tr' and self.table is not None: self.row=[]
+        elif tag in ('td','th') and self.row is not None: self.cell=[]
     def handle_data(self, data):
         if self.cell is not None: self.cell.append(data)
-
     def handle_endtag(self, tag):
-        if tag == 'script': self.in_script = False
-        if tag in ('td', 'th') and self.cell is not None and self.row is not None:
-            self.row.append(' '.join(' '.join(self.cell).split()))
-            self.cell = None
-        if tag == 'tr' and self.row is not None and self.current is not None:
-            if self.row: self.current.append(self.row)
-            self.row = None
-        if tag == 'table' and self.current is not None:
-            self.tables.append(self.current)
-            self.current = None
+        if tag in ('td','th') and self.cell is not None:
+            self.row.append(' '.join(''.join(self.cell).split())); self.cell=None
+        elif tag == 'tr' and self.row is not None:
+            if self.row: self.table.append(self.row)
+            self.row=None
+        elif tag == 'table' and self.table is not None:
+            self.tables.append(self.table); self.table=None
 
 
-def walk(obj, depth=0, path='$', stats=None):
-    if stats is None: stats = Counter()
-    if depth > 8: return stats
-    if isinstance(obj, dict):
-        if depth < 3: print('  object', path, 'keys:', list(obj)[:22])
-        for k, v in obj.items():
-            stats[str(k)] += 1
-            walk(v, depth + 1, path + '.' + str(k), stats)
-    elif isinstance(obj, list):
-        if depth < 3:
-            print('  list', path, 'length:', len(obj), 'first type:', type(obj[0]).__name__ if obj else 'empty')
-            if obj and isinstance(obj[0], list): print('  first row preview:', [str(x)[:48] for x in obj[0][:12]])
-        for v in obj[:min(len(obj), 100)]: walk(v, depth + 1, path + '[*]', stats)
-    return stats
+def parse_day(s):
+    m = re.fullmatch(r'\s*(20\d{2})年(\d{1,2})月(\d{1,2})日\s*',s)
+    if not m: return None
+    return dt.date(*map(int,m.groups())).isoformat()
 
 
-def inspect_json():
-    print('=== nikkei225jp JSON endpoint ===')
-    url = 'https://nikkei225jp.com/_data/_nfsDATA/json_DAY/VOL.json'
-    try:
-        status, final, raw = download(url)
-        print('HTTP:', status, 'bytes:', len(raw), 'final:', final)
-        try: data = json.loads(raw)
-        except json.JSONDecodeError:
-            print('Not valid JSON; first 120 characters:', repr(raw[:120])); return
-        keys = walk(data)
-        print('Most common JSON keys:', keys.most_common(30))
-        print('JSON structure inspected: YES; market-price extraction verified: NO (schema requires validation)')
-    except Exception as exc:
-        print('JSON fetch FAILED:', type(exc).__name__, str(exc)[:280])
+def num(s):
+    return int(s.replace(',','').strip())
 
 
 def inspect_volume():
-    print('\n=== stock-marketdata HTML volume table ===')
-    url = 'https://stock-marketdata.com/trading-volume.html'
-    try:
-        status, final, raw = download(url)
-        print('HTTP:', status, 'bytes:', len(raw), 'final:', final)
-        parser = TableReader(); parser.feed(raw)
-        print('Tables found:', len(parser.tables))
-        for i, rows in enumerate(parser.tables):
-            print(f'Table {i}: rows={len(rows)}')
-            for row in rows[:min(5, len(rows))]: print('  ', row[:15])
-            plausible = [r for r in rows if r and re.search(r'20\d{2}[/-]\d{1,2}[/-]\d{1,2}', r[0])]
-            print('Rows with ISO-style dates in first cell:', len(plausible))
-            if plausible:
-                print('Date first / last:', plausible[0][0], plausible[-1][0])
-                if len(plausible[0]) >= 10:
-                    print('Candidate 3-market volume row identified: YES (manual unit / column verification still required)')
-                else:
-                    print('Candidate table is too narrow to map all market columns')
-            else:
-                print('No parseable dated rows. Page may render table via JS.')
-    except Exception as exc:
-        print('Volume fetch FAILED:', type(exc).__name__, str(exc)[:280])
+    print('=== MARKET VOLUME VALIDATION ===')
+    status, url, html = get('https://stock-marketdata.com/trading-volume.html')
+    print('HTTP:',status,'URL:',url)
+    p=Tables();p.feed(html)
+    print('HTML tables:',len(p.tables))
+    accepted=[]
+    for table in p.tables:
+        for row in table:
+            if len(row)<10: continue
+            day=parse_day(row[0])
+            if not day: continue
+            try:
+                values={name: num(row[idx]) for name,idx in [('P',1),('S',4),('G',7)]}
+                changes={name: float(row[idx].replace('%','')) for name,idx in [('P',3),('S',6),('G',9)]}
+                if any(v<=0 for v in values.values()): raise ValueError('non-positive volume')
+                if any(not -100 <= v <= 1000 for v in changes.values()): raise ValueError('unexpected percentage')
+                accepted.append((day,values,changes))
+            except ValueError as e:
+                print('Skipped invalid row date:',day, str(e))
+    accepted.sort(key=lambda x:x[0])
+    print('PARSED VOLUME ROWS:',len(accepted))
+    if accepted:
+        print('DATE RANGE:',accepted[0][0],'to',accepted[-1][0])
+        for day, values, changes in accepted[-3:]:
+            print('CHECK:',day,'P/S/G volumes:',values,'reported percent:',changes)
+        if len(accepted)>=2:
+            day, current, reported=accepted[-1]
+            previous=accepted[-2][1]
+            print('LATEST PERCENT CROSS-CHECK (rounding tolerance 0.1pp):')
+            for k in ('P','S','G'):
+                calculated=(current[k]/previous[k]-1)*100
+                ok=abs(calculated-reported[k])<=0.1
+                print(k,'computed',round(calculated,2),'reported',reported[k],'consistent',ok)
+    print('VOLUME PARSING:', 'PASS' if len(accepted)>=20 else 'INCOMPLETE')
 
 
-if __name__ == '__main__':
-    inspect_json()
-    inspect_volume()
-    print('\nDIAGNOSTIC COMPLETE: HTTP success does not prove reuse rights or validated extraction.')
+def inspect_index():
+    print('\n=== INDEX SOURCE AVAILABILITY ===')
+    page='https://nikkei225jp.com/data/vol.php'
+    status, final, html=get(page)
+    print('Page HTTP:',status,'bytes:',len(html))
+    # Use URLs explicitly present in the source page; no fabricated endpoints.
+    urls=re.findall(r'<script[^>]*\bsrc=[\'\"]([^\'\"]+)[\'\"]',html,re.I)
+    match=[u for u in urls if 'VOL.json' in u or 'ajax_NDY_min.js' in u]
+    print('RELEVANT REFERENCED ASSETS:',match)
+    for link in match[:3]:
+        url=urllib.parse.urljoin(page,link.replace('&amp;','&'))
+        try:
+            status, final, body=get(url)
+            print('ASSET',urllib.parse.urlsplit(url).path,'HTTP:',status,'bytes:',len(body))
+            if 'VOL.json' in url:
+                try:
+                    data=json.loads(body)
+                    print('JSON top-level type:',type(data).__name__)
+                    if isinstance(data,dict):print('JSON keys:',list(data)[:20])
+                    if isinstance(data,list):print('JSON list length:',len(data),'first item type:',type(data[0]).__name__ if data else '-')
+                except json.JSONDecodeError:
+                    print('Asset was not valid JSON')
+        except Exception as exc:
+            print('ASSET FAILURE',urllib.parse.urlsplit(url).path,type(exc).__name__,str(exc)[:160])
+    print('INDEX PRICE EXTRACTION: NOT YET VERIFIED')
+
+
+if __name__=='__main__':
+    try: inspect_volume()
+    except Exception as exc: print('VOLUME ERROR:',type(exc).__name__,str(exc))
+    try: inspect_index()
+    except Exception as exc: print('INDEX ERROR:',type(exc).__name__,str(exc))
+    print('DIAGNOSTIC ONLY. Confirm permission before recurring download and republication.')
